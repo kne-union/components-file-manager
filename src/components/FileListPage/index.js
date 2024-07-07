@@ -59,7 +59,7 @@ const FileListPage = createWithRemoteLoader({
                         children: '删除',
                         confirm: true,
                         onClick: async () => {
-                            const {data: resData} = await ajax(Object.assign({}, apis.fileManager, {
+                            const {data: resData} = await ajax(Object.assign({}, apis.fileManager.deleteFile, {
                                 data: {id: item.id}
                             }));
                             if (resData.code !== 0) {
