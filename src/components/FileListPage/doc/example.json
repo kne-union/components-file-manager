@@ -1,0 +1,28 @@
+{
+  "isFull": false,
+  "list": [
+    {
+      "title": "这里填写示例标题",
+      "description": "这里填写示例说明",
+      "code": "./base.js",
+      "scope": [
+        {
+          "name": "_FileListPage",
+          "packageName": "@components/FileListPage"
+        },
+        {
+          "name": "lodash",
+          "packageName": "lodash"
+        },
+        {
+          "name": "_Apis",
+          "packageName": "@components/Apis"
+        },
+        {
+          "name": "remoteLoader",
+          "packageName": "@kne/remote-loader"
+        }
+      ]
+    }
+  ]
+}

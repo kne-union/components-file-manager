@@ -7,8 +7,8 @@
       "code": "./base.js",
       "scope": [
         {
-          "name": "_Test",
-          "packageName": "@components/Test"
+          "name": "_Apis",
+          "packageName": "@components/Apis"
         }
       ]
     }

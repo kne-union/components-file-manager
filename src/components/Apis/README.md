@@ -1,5 +1,5 @@
 
-# Test
+# Apis
 
 
 ### 概述
@@ -13,12 +13,15 @@
 
 - 这里填写示例标题
 - 这里填写示例说明
-- _Test(@components/Test)
+- _Apis(@components/Apis)
 
 ```jsx
-const {default:Test} = _Test;
-const BaseExample = ()=>{
-    return <Test />;
+const { default: Apis } = _Apis;
+const BaseExample = () => {
+  return <Apis>{({getApis})=>{
+    console.log(getApis());
+    return null;
+  }}</Apis>;
 };
 
 render(<BaseExample />);

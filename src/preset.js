@@ -24,6 +24,7 @@ export const globalInit = async () => {
       },
       error => {
         message.error(error.message || '请求发生错误');
+        console.error(error);
         return Promise.reject(error);
       }
     );
@@ -39,6 +40,7 @@ export const globalInit = async () => {
           }))
           .catch(err => {
             message.error(err.message || '请求发生错误');
+            console.error(err);
             return { data: { code: 500, msg: err.message } };
           });
       }
@@ -79,7 +81,7 @@ export const globalInit = async () => {
   const componentsCoreRemote = {
     ...registry,
     remote: 'components-core',
-    defaultVersion: '0.1.76'
+    defaultVersion: '0.2.11'
   };
   remoteLoaderPreset({
     remotes: {
@@ -105,8 +107,21 @@ export const globalInit = async () => {
     }
   });
 
+  const ajaxPostForm = axios.postForm;
+
   return {
     ajax,
+    ajaxPostForm,
+    apis: {
+      oss: {
+        url: '/api/v1/static/file-url/{id}',
+        paramsType: 'urlParams',
+        ignoreSuccessState: true
+      },
+      ossUpload: async ({ file }) => {
+        return ajaxPostForm('/api/v1/static/upload', { file });
+      }
+    },
     themeToken: {
       colorPrimary: '#4F185A',
       colorPrimaryHover: '#702280'
