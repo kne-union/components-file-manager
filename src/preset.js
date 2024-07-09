@@ -81,7 +81,7 @@ export const globalInit = async () => {
   const componentsCoreRemote = {
     ...registry,
     remote: 'components-core',
-    defaultVersion: '0.2.9'
+    defaultVersion: '0.2.11'
   };
   remoteLoaderPreset({
     remotes: {
@@ -107,17 +107,20 @@ export const globalInit = async () => {
     }
   });
 
+  const ajaxPostForm = axios.postForm;
+
   return {
     ajax,
-    apis:{
+    ajaxPostForm,
+    apis: {
       oss: {
         url: '/api/v1/static/file-url/{id}',
         paramsType: 'urlParams',
         ignoreSuccessState: true
       },
       ossUpload: async ({ file }) => {
-        return await axios.postForm('/api/v1/static/upload', { file });
-      },
+        return ajaxPostForm('/api/v1/static/upload', { file });
+      }
     },
     themeToken: {
       colorPrimary: '#4F185A',
