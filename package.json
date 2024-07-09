@@ -1,7 +1,7 @@
 {
   "name": "@kne-components/components-file-manager",
   "version": "0.1.0",
-  "description": "用于管理文件",
+  "description": "用于管理文件.",
   "scripts": {
     "init": "husky",
     "start": "cross-env PORT=3010 COMPONENTS_NAME=components-file-manager MODULES_DEV_PUBLIC_URL=/ craco start",
