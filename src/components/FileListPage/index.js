@@ -21,18 +21,36 @@ const FileListPage = createWithRemoteLoader({
   const { apis, ajax, staticUrl, ajaxPostForm } = usePreset();
   const modal = useModal();
   const { SearchInput, getFilterValue } = Filter;
-  const { InputFilterItem, NumberRangeFilterItem } = Filter.fields;
+  const { InputFilterItem, NumberRangeFilterItem, TypeDateRangePickerFilterItem } = Filter.fields;
   const ref = useRef();
   const [filter, setFilter] = useState([]);
   const { message } = App.useApp();
   const formModal = FormInfo.useFormModal();
   const { Input, Upload } = FormInfo.fields;
   const [selections, setSelections] = useState([]);
-
+  const filterValue = getFilterValue(filter);
   return (
     <TablePage
       {...Object.assign({}, apis.fileManager.getFileList, {
-        data: Object.assign({}, { filter: getFilterValue(filter) })
+        data: Object.assign(
+          {},
+          {
+            filter: Object.assign({}, filterValue, {
+              createdAt: filterValue.createdAt
+                ? {
+                    startTime: filterValue.createdAt.value[0],
+                    endTime: filterValue.createdAt.value[1]
+                  }
+                : null,
+              updatedAt: filterValue.updatedAt
+                ? {
+                    startTime: filterValue.updatedAt.value[0],
+                    endTime: filterValue.updatedAt.value[1]
+                  }
+                : null
+            })
+          }
+        )
       })}
       rowSelection={{
         type: 'checkbox',
@@ -140,7 +158,15 @@ const FileListPage = createWithRemoteLoader({
         filter: {
           value: filter,
           onChange: setFilter,
-          list: [[<InputFilterItem name="namespace" label="来源" />, <NumberRangeFilterItem name="size" label="大小" unit="K" />]]
+          list: [
+            [
+              <InputFilterItem name="id" label="ID" />,
+              <InputFilterItem name="namespace" label="来源" />,
+              <NumberRangeFilterItem name="size" label="大小" unit="K" />,
+              <TypeDateRangePickerFilterItem label="创建时间" name="createdAt" allowEmpty={[true, true]} />,
+              <TypeDateRangePickerFilterItem label="更新时间" name="updatedAt" allowEmpty={[true, true]} />
+            ]
+          ]
         },
         titleExtra: (
           <Space>
@@ -157,8 +183,7 @@ const FileListPage = createWithRemoteLoader({
                   },
                   footer: null
                 });
-              }}
-            >
+              }}>
               添加文件
             </Button>
             <ConfirmButton
@@ -174,8 +199,7 @@ const FileListPage = createWithRemoteLoader({
                 }
                 message.success('删除成功');
                 ref.current.reload();
-              }}
-            >
+              }}>
               批量删除
             </ConfirmButton>
           </Space>
