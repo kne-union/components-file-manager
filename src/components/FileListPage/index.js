@@ -96,6 +96,7 @@ const FileListPage = createWithRemoteLoader({
                 children: '更新',
                 buttonComponent: Upload.Field,
                 renderTips: () => null,
+                accept: ['*'],
                 showUploadList: false,
                 maxLength: 1,
                 ossUpload: ({ file }) => {
