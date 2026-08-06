@@ -6,6 +6,7 @@ import { DownOutlined, FolderAddOutlined, MinusSquareOutlined, UploadOutlined } 
 import { useIntl } from '@kne/react-intl';
 import withLocale from './withLocale';
 import mapTreeToItems from './mapTreeToItems';
+import useFolderPageCache from './useFolderPageCache';
 import style from './style.module.scss';
 
 // 与 @kne/react-file FilePreview 默认可预览后缀对齐
@@ -20,16 +21,33 @@ const canPreviewEntry = entry => {
 };
 
 const createDefaultFolderApis = ({ ajax, apis, type }) => ({
-  listTree: async () => {
+  listTree: async ({ kind } = {}) => {
     const { data: resData } = await ajax(
       Object.assign({}, apis.fileManager.folderTree, {
-        params: { type }
+        params: Object.assign({ type }, kind ? { kind } : {})
       })
     );
     if (resData.code !== 0) {
       return [];
     }
     return resData.data || [];
+  },
+  listFolder: async ({ parentId, currentPage = 1, perPage = 40, keyword } = {}) => {
+    const { data: resData } = await ajax(
+      Object.assign({}, apis.fileManager.folderList, {
+        data: {
+          type,
+          parentId: parentId || undefined,
+          currentPage,
+          perPage,
+          keyword: keyword || undefined
+        }
+      })
+    );
+    if (resData.code !== 0) {
+      return { pageData: [], totalCount: 0 };
+    }
+    return resData.data || { pageData: [], totalCount: 0 };
   },
   createFolder: async ({ name, parentId }) => {
     const { data: resData } = await ajax(
@@ -85,26 +103,32 @@ const getTopLevelEntries = entries => {
   return (entries || []).filter(item => item.parentId == null || !ids.has(item.parentId));
 };
 
-const collectSelectedFileIds = (entries, allItems) => {
+/** 批量下载：优先用选中文件的 fileId；文件夹选中时仅包含已加载子文件 */
+const collectSelectedFileIds = (entries, loadedEntries = []) => {
   const selectedIds = new Set((entries || []).map(item => item.id));
-  const byId = new Map((allItems || []).map(item => [item.id, item]));
-  const underSelected = item => {
-    let current = item;
-    while (current) {
-      if (selectedIds.has(current.id)) {
-        return true;
-      }
-      current = current.parentId != null ? byId.get(current.parentId) : null;
-    }
-    return false;
-  };
-
   const fileIds = [];
-  (allItems || []).forEach(item => {
-    if (item.kind === 'file' && item.fileId && underSelected(item)) {
+
+  (entries || []).forEach(item => {
+    if (item.kind === 'file' && item.fileId) {
       fileIds.push(item.fileId);
     }
   });
+
+  const selectedFolderPaths = (entries || []).filter(item => item.kind === 'folder').map(item => item.path);
+  if (selectedFolderPaths.length) {
+    (loadedEntries || []).forEach(item => {
+      if (!item || item.kind !== 'file' || !item.fileId) {
+        return;
+      }
+      if (selectedIds.has(item.id)) {
+        return;
+      }
+      if (selectedFolderPaths.some(folderPath => item.path.startsWith(folderPath))) {
+        fileIds.push(item.fileId);
+      }
+    });
+  }
+
   return [...new Set(fileIds)];
 };
 
@@ -152,6 +176,199 @@ const buildMoveTreeData = (allItems, disabledIds, rootLabel) => {
   ];
 };
 
+const FileSystemPagedBody = ({
+  CoreFileSystem,
+  folderItems,
+  folderApis,
+  currentPath,
+  setCurrentPath,
+  pathToIdRef,
+  folderItemsRef,
+  entriesRef,
+  pageCacheInvalidateRef,
+  className,
+  title,
+  defaultView,
+  defaultPath,
+  props,
+  handleFileOpen,
+  handleSelectionChange,
+  renderFilePreview,
+  canPreviewFile,
+  getEntryStatus,
+  propertiesActions,
+  onPropertiesAction,
+  toolbarExtraProp,
+  selectedEntries,
+  resolveParentId,
+  handleReload,
+  handleBatchDelete,
+  handleBatchDownload,
+  handleBatchMove,
+  handleBatchCopy,
+  handleCreateFolder,
+  formatMessage,
+  message,
+  style: styleMod
+}) => {
+  folderItemsRef.current = folderItems;
+  const pathToId = useMemo(() => {
+    const map = new Map();
+    folderItems.forEach(item => {
+      if (item.kind === 'folder') {
+        map.set(item.path, item.id);
+      }
+    });
+    return map;
+  }, [folderItems]);
+  pathToIdRef.current = pathToId;
+
+  const parentId = currentPath ? pathToId.get(currentPath) || null : null;
+  const listFolder = useCallback(params => folderApis.listFolder(params), [folderApis]);
+  const { entries, totalCount, loadingIndexes, ready, listings, handleVisibleRangeChange, registerFolder, invalidateAndReload } = useFolderPageCache({
+    listFolder,
+    parentId,
+    parentPath: currentPath || '',
+    pathToId,
+    enabled: true
+  });
+
+  // 文件夹树只有 folder；把已分页加载的文件合并进 items，避免分栏展开列误用 folders-only index
+  const indexItems = useMemo(() => {
+    const map = new Map();
+    (folderItems || []).forEach(item => {
+      if (item?.path != null) {
+        map.set(item.path, item);
+      }
+    });
+    Object.keys(listings || {}).forEach(key => {
+      ((listings[key] && listings[key].entries) || []).forEach(entry => {
+        if (entry?.path != null) {
+          map.set(entry.path, entry);
+        }
+      });
+    });
+    return Array.from(map.values());
+  }, [folderItems, listings]);
+
+  entriesRef.current = entries;
+  pageCacheInvalidateRef.current = invalidateAndReload;
+
+  return (
+    <CoreFileSystem
+      {...props}
+      className={className}
+      title={title}
+      defaultView={defaultView}
+      defaultPath={defaultPath}
+      items={indexItems}
+      entries={entries}
+      totalCount={totalCount}
+      loadingIndexes={loadingIndexes}
+      ready={ready}
+      columnListings={listings}
+      onVisibleRangeChange={handleVisibleRangeChange}
+      onRegisterFolder={registerFolder}
+      onFileOpen={handleFileOpen}
+      onSelectionChange={handleSelectionChange}
+      onPathChange={setCurrentPath}
+      renderFilePreview={renderFilePreview}
+      canPreviewFile={canPreviewFile}
+      getEntryStatus={getEntryStatus}
+      propertiesActions={propertiesActions}
+      onPropertiesAction={onPropertiesAction}
+      toolbarExtra={({ clearSelection }) => {
+        const hasSelection = selectedEntries.length > 0;
+        const extraNode =
+          typeof toolbarExtraProp === 'function'
+            ? toolbarExtraProp({
+                selectedEntries,
+                currentPath,
+                parentId: resolveParentId(),
+                reload: handleReload,
+                clearSelection
+              })
+            : toolbarExtraProp;
+
+        const batchMenuItems = [
+          {
+            key: 'delete',
+            label: formatMessage({ id: 'BatchDelete' }),
+            danger: true,
+            onClick: () => handleBatchDelete({ clearSelection })
+          },
+          {
+            key: 'download',
+            label: formatMessage({ id: 'BatchDownloadZip' }),
+            onClick: () => handleBatchDownload()
+          },
+          {
+            key: 'move',
+            label: formatMessage({ id: 'MoveTo' }),
+            onClick: () => handleBatchMove({ clearSelection })
+          },
+          {
+            key: 'copy',
+            label: formatMessage({ id: 'CopyTo' }),
+            onClick: () => handleBatchCopy({ clearSelection })
+          }
+        ];
+
+        return (
+          <Space size={8} className={styleMod.toolbarExtra}>
+            <Upload
+              showUploadList={false}
+              customRequest={async ({ file, onSuccess, onError }) => {
+                try {
+                  const response = await folderApis.uploadFile({
+                    file,
+                    parentId: resolveParentId()
+                  });
+                  if (response?.data?.code != null && response.data.code !== 0) {
+                    onError?.(new Error('upload failed'));
+                    return;
+                  }
+                  message.success(formatMessage({ id: 'UploadSuccess' }));
+                  handleReload();
+                  onSuccess?.(response);
+                } catch (e) {
+                  onError?.(e);
+                }
+              }}
+            >
+              <Button size="small" icon={<UploadOutlined />}>
+                {formatMessage({ id: 'UploadFile' })}
+              </Button>
+            </Upload>
+            <Button size="small" icon={<FolderAddOutlined />} onClick={handleCreateFolder}>
+              {formatMessage({ id: 'CreateFolder' })}
+            </Button>
+            {hasSelection ? (
+              <div className={styleMod.batchActions}>
+                <Dropdown menu={{ items: batchMenuItems }} trigger={['click']}>
+                  <Button size="small" className={styleMod.batchActionsBtn}>
+                    {formatMessage({ id: 'BatchOperationsWithCount' }, { count: selectedEntries.length })}
+                    <DownOutlined />
+                  </Button>
+                </Dropdown>
+                <Button
+                  size="small"
+                  icon={<MinusSquareOutlined />}
+                  title={formatMessage({ id: 'CancelSelection' })}
+                  aria-label={formatMessage({ id: 'CancelSelection' })}
+                  className={styleMod.batchActionsClearBtn}
+                  onClick={() => clearSelection?.()}
+                />
+              </div>
+            ) : null}
+            {extraNode}
+          </Space>
+        );
+      }}
+    />
+  );
+};
+
 const FileSystem = createWithRemoteLoader({
   modules: [
     'components-core:File@FileSystem',
@@ -181,6 +398,7 @@ const FileSystem = createWithRemoteLoader({
       renderFilePreview: renderFilePreviewProp,
       canPreviewFile: canPreviewFileProp,
       getEntryStatus,
+      virtualScroll = true,
       ...props
     }) => {
       const [CoreFileSystem, usePreset, FormInfo, useFormModal, FilePreview, useModal, Download, Icon] = remoteModules;
@@ -192,7 +410,10 @@ const FileSystem = createWithRemoteLoader({
       const { Input, TreeSelect } = FormInfo.fields;
       const fetchRef = useRef(null);
       const itemsRef = useRef([]);
+      const folderItemsRef = useRef([]);
+      const entriesRef = useRef([]);
       const pathToIdRef = useRef(new Map());
+      const pageCacheInvalidateRef = useRef(null);
       const [currentPath, setCurrentPath] = useState(defaultPath || '');
       const [selectedEntries, setSelectedEntries] = useState([]);
 
@@ -213,7 +434,10 @@ const FileSystem = createWithRemoteLoader({
 
       const handleReload = useCallback(() => {
         fetchRef.current?.reload?.();
-      }, []);
+        if (virtualScroll) {
+          pageCacheInvalidateRef.current?.();
+        }
+      }, [virtualScroll]);
 
       const handleCreateFolder = useCallback(() => {
         const formModalApi = formModal({
@@ -321,7 +545,7 @@ const FileSystem = createWithRemoteLoader({
       );
 
       const handleBatchDownload = useCallback(async () => {
-        const ids = collectSelectedFileIds(selectedEntries, itemsRef.current);
+        const ids = collectSelectedFileIds(selectedEntries, virtualScroll ? entriesRef.current : itemsRef.current);
         if (!ids.length) {
           message.warning(formatMessage({ id: 'BatchDownloadEmpty' }));
           return;
@@ -357,7 +581,7 @@ const FileSystem = createWithRemoteLoader({
         } catch (e) {
           message.error(formatMessage({ id: 'BatchDownloadFailed' }));
         }
-      }, [Download, ajax, apis.fileManager.downloadFiles, formatMessage, message, selectedEntries]);
+      }, [Download, ajax, apis.fileManager.downloadFiles, formatMessage, message, selectedEntries, virtualScroll]);
 
       const handleBatchMove = useCallback(
         ({ clearSelection }) => {
@@ -365,14 +589,15 @@ const FileSystem = createWithRemoteLoader({
           if (!targets.length) {
             return;
           }
+          const treeSource = virtualScroll ? folderItemsRef.current : itemsRef.current;
           const disabledIds = new Set();
           targets.forEach(entry => {
             if (entry.kind === 'folder') {
               disabledIds.add(entry.id);
-              collectDescendantIds(entry.id, itemsRef.current).forEach(id => disabledIds.add(id));
+              collectDescendantIds(entry.id, treeSource).forEach(id => disabledIds.add(id));
             }
           });
-          const treeData = buildMoveTreeData(itemsRef.current, disabledIds, formatMessage({ id: 'RootFolder' }));
+          const treeData = buildMoveTreeData(treeSource, disabledIds, formatMessage({ id: 'RootFolder' }));
           const formModalApi = formModal({
             title: formatMessage({ id: 'MoveTo' }),
             size: 'small',
@@ -410,7 +635,7 @@ const FileSystem = createWithRemoteLoader({
             )
           });
         },
-        [FormInfo, TreeSelect, folderApis, formModal, formatMessage, handleReload, message, selectedEntries]
+        [FormInfo, TreeSelect, folderApis, formModal, formatMessage, handleReload, message, selectedEntries, virtualScroll]
       );
 
       const handleBatchCopy = useCallback(
@@ -419,14 +644,15 @@ const FileSystem = createWithRemoteLoader({
           if (!targets.length) {
             return;
           }
+          const treeSource = virtualScroll ? folderItemsRef.current : itemsRef.current;
           const disabledIds = new Set();
           targets.forEach(entry => {
             if (entry.kind === 'folder') {
               disabledIds.add(entry.id);
-              collectDescendantIds(entry.id, itemsRef.current).forEach(id => disabledIds.add(id));
+              collectDescendantIds(entry.id, treeSource).forEach(id => disabledIds.add(id));
             }
           });
-          const treeData = buildMoveTreeData(itemsRef.current, disabledIds, formatMessage({ id: 'RootFolder' }));
+          const treeData = buildMoveTreeData(treeSource, disabledIds, formatMessage({ id: 'RootFolder' }));
           const formModalApi = formModal({
             title: formatMessage({ id: 'CopyTo' }),
             size: 'small',
@@ -464,7 +690,7 @@ const FileSystem = createWithRemoteLoader({
             )
           });
         },
-        [FormInfo, TreeSelect, folderApis, formModal, formatMessage, handleReload, message, selectedEntries]
+        [FormInfo, TreeSelect, folderApis, formModal, formatMessage, handleReload, message, selectedEntries, virtualScroll]
       );
 
       const handleRename = useCallback(
@@ -562,10 +788,51 @@ const FileSystem = createWithRemoteLoader({
 
       return (
         <Fetch
-          loader={async () => folderApis.listTree()}
+          loader={async () => (virtualScroll ? folderApis.listTree({ kind: 'folder' }) : folderApis.listTree())}
           render={({ data, reload, refresh }) => {
             fetchRef.current = { reload: reload || refresh };
             const items = mapTreeToItems(data || []);
+
+            if (virtualScroll) {
+              return (
+                <FileSystemPagedBody
+                  CoreFileSystem={CoreFileSystem}
+                  folderItems={items}
+                  folderApis={folderApis}
+                  currentPath={currentPath}
+                  setCurrentPath={setCurrentPath}
+                  pathToIdRef={pathToIdRef}
+                  folderItemsRef={folderItemsRef}
+                  entriesRef={entriesRef}
+                  pageCacheInvalidateRef={pageCacheInvalidateRef}
+                  className={className}
+                  title={title || formatMessage({ id: 'Files' })}
+                  defaultView={defaultView}
+                  defaultPath={defaultPath}
+                  props={props}
+                  handleFileOpen={handleFileOpen}
+                  handleSelectionChange={handleSelectionChange}
+                  renderFilePreview={renderFilePreview}
+                  canPreviewFile={canPreviewFile}
+                  getEntryStatus={getEntryStatus}
+                  propertiesActions={propertiesActions}
+                  onPropertiesAction={onPropertiesActionProp || handlePropertiesAction}
+                  toolbarExtraProp={toolbarExtraProp}
+                  selectedEntries={selectedEntries}
+                  resolveParentId={resolveParentId}
+                  handleReload={handleReload}
+                  handleBatchDelete={handleBatchDelete}
+                  handleBatchDownload={handleBatchDownload}
+                  handleBatchMove={handleBatchMove}
+                  handleBatchCopy={handleBatchCopy}
+                  handleCreateFolder={handleCreateFolder}
+                  formatMessage={formatMessage}
+                  message={message}
+                  style={style}
+                />
+              );
+            }
+
             itemsRef.current = items;
             const pathToId = new Map();
             items.forEach(item => {

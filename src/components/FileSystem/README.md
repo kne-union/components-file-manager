@@ -33,6 +33,7 @@ const BaseExample = createWithRemoteLoader({
             1. 多选后「新建文件夹」旁出现「已选:N条」：删除 / 压缩包下载 / 移动到
             2. 选中后右侧显示默认属性面板（扩展见 FileSystem.PropertiesPanel 示例）
             3. mock 含中英文超长文件名/文件夹，可切换图标/列表/分栏/画廊查看截断与换行
+            4. 默认开启 virtualScroll；进入「大目录-虚拟滚动」（40 文件夹 + 960 文件）测分页加载
           */}
           <FileSystem type="demo" title="演示文件库" defaultView="icons" propertiesPanel />
         </div>
@@ -149,6 +150,151 @@ render(<BaseExample />);
 
 ```
 
+- 虚拟滚动（默认）
+- 列表默认视图 + 模拟真实 RTT（首包约 0.5–0.8s，翻页更慢）；右侧时间线展示 start→done。进入「大目录-虚拟滚动」滚动观察 skeleton 与分页
+- _FileSystem(@components/FileSystem),_mockPreset(@root/mockPreset),remoteLoader(@kne/remote-loader)
+
+```jsx
+const { default: FileSystem } = _FileSystem;
+const { default: mockPreset, folderRequestBus } = _mockPreset;
+const { createWithRemoteLoader } = remoteLoader;
+const { useEffect, useState } = React;
+
+const formatTime = ts => {
+  const d = new Date(ts);
+  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map(n => String(n).padStart(2, '0'))
+    .join(':')
+    .concat('.')
+    .concat(String(d.getMilliseconds()).padStart(3, '0'));
+};
+
+const formatRange = range => (Array.isArray(range) && range.length === 2 ? `${range[0]}–${range[1]}` : '-');
+
+const RequestLogPanel = () => {
+  const [logs, setLogs] = useState([]);
+
+  useEffect(() => {
+    if (!folderRequestBus || typeof folderRequestBus.addEventListener !== 'function') {
+      return undefined;
+    }
+    const onRequest = event => {
+      const detail = event.detail;
+      if (!detail || detail.api !== 'folder/list') {
+        return;
+      }
+      setLogs(prev => {
+        const next = prev.slice();
+        const index = next.findIndex(item => item.requestId && item.requestId === detail.requestId);
+        if (index >= 0) {
+          next[index] = Object.assign({}, next[index], detail);
+        } else {
+          next.unshift(detail);
+        }
+        return next.slice(0, 24);
+      });
+    };
+    folderRequestBus.addEventListener('request', onRequest);
+    return () => folderRequestBus.removeEventListener('request', onRequest);
+  }, []);
+
+  const pendingCount = logs.filter(item => item.phase === 'start').length;
+
+  return (
+    <div
+      style={{
+        flex: '0 0 360px',
+        height: '100%',
+        overflow: 'auto',
+        border: '1px solid #d9d9d9',
+        borderRadius: 8,
+        padding: 12,
+        background: '#fafafa',
+        fontSize: 12,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+      }}
+    >
+      <div style={{ fontWeight: 600, marginBottom: 4 }}>分页加载时间线</div>
+      <div style={{ color: '#666', marginBottom: 8, lineHeight: 1.5 }}>
+        mock 模拟真实 RTT：首包约 0.5–0.8s，翻页越往后越慢。看左侧 skeleton，右侧看
+        <code> start → done </code>。
+      </div>
+      <div style={{ marginBottom: 12, color: pendingCount ? '#d46b08' : '#52c41a' }}>
+        {pendingCount > 0 ? `进行中 ${pendingCount} 个请求…` : '空闲'}
+      </div>
+      {logs.length === 0 ? <div style={{ color: '#999' }}>暂无请求：双击进入「大目录-虚拟滚动」，再慢慢向下滚</div> : null}
+      {logs.map(item => {
+        const req = item.request || {};
+        const res = item.response || {};
+        const loading = item.phase === 'start';
+        return (
+          <div
+            key={item.requestId || `${item.at}`}
+            style={{
+              marginBottom: 10,
+              padding: 8,
+              borderRadius: 6,
+              background: loading ? '#e6f4ff' : item.isBulk ? '#fff7e6' : '#fff',
+              border: `1px solid ${loading ? '#91caff' : item.isBulk ? '#ffd591' : '#eee'}`
+            }}
+          >
+            <div style={{ marginBottom: 6, fontWeight: 600 }}>
+              {loading ? '⏳ 请求中' : '✅ 已返回'} · page {req.currentPage}
+              {item.isBulk ? ' · bulk' : ''}
+            </div>
+            <div style={{ marginBottom: 4, color: '#666' }}>
+              {formatTime(item.at)} · {item.parentName || '(root)'}
+            </div>
+            <div style={{ lineHeight: 1.6 }}>
+              <div>
+                body: type={String(req.type)} parentId={String(req.parentId)} perPage={String(req.perPage)}
+              </div>
+              {loading ? (
+                <div>
+                  预计返回条目 {formatRange(res.expectedRange)} / 共 {res.totalHint}，模拟延迟 ~{item.latencyMs}ms
+                </div>
+              ) : (
+                <div>
+                  实际返回 {res.pageDataLength} 条（{formatRange(res.range)}）/ 共 {res.totalCount}
+                  {res.hasMore ? '，还有更多' : '，本目录已到末页'}
+                  <br />
+                  耗时 {item.durationMs}ms
+                  {res.pageNames?.length ? ` · 例: ${res.pageNames.join(', ')}` : ''}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const BaseExample = createWithRemoteLoader({
+  modules: ['components-core:Global@PureGlobal', 'components-core:Layout']
+})(({ remoteModules }) => {
+  const [PureGlobal, Layout] = remoteModules;
+  return (
+    <PureGlobal preset={mockPreset}>
+      <Layout navigation={{ isFixed: false }}>
+        <div style={{ padding: 16, height: 640, display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0, height: '100%' }}>
+            {/*
+              列表视图更容易看到行级 skeleton；大目录滚动时右侧时间线会显示 start→done。
+            */}
+            <FileSystem type="demo" title="演示文件库（虚拟滚动）" defaultView="list" propertiesPanel />
+          </div>
+          <RequestLogPanel />
+        </div>
+      </Layout>
+    </PureGlobal>
+  );
+});
+
+render(<BaseExample />);
+
+```
+
 - 扩展顶部菜单
 - 通过 toolbarExtra 在上传/新建文件夹旁追加自定义操作，可拿到 selectedEntries / reload 等上下文
 - _FileSystem(@components/FileSystem),_mockPreset(@root/mockPreset),remoteLoader(@kne/remote-loader),antd(antd),icons(@ant-design/icons)
@@ -216,13 +362,14 @@ render(<BaseExample />);
 
 | 属性名 | 说明 | 类型 | 默认值 |
 | --- | --- | --- | --- |
+| virtualScroll | 是否开启虚拟分页滚动（大目录按需拉页）；默认开启，可传 `false` 回退整树加载 | boolean | `true` |
 | type | 业务域（必填） | string | - |
 | title | 根目录标题 | string | - |
 | folderApis | 自定义文件夹 API | object | 默认走 fileManager.folder* |
 | toolbarExtra | 顶部菜单扩展（接在上传/新建文件夹后） | ReactNode \| `({ selectedEntries, currentPath, parentId, reload, clearSelection }) => ReactNode` | - |
 | propertiesPanel | 右侧属性面板（透传核心 FileSystem） | boolean \| ReactNode \| `({ selectedEntries, index, currentPath, close, actions, onAction, defaultActions }) => ReactNode` | true |
 | propertiesActions | 属性面板操作按钮 | `false` \| `ActionItem[]` \| `(ctx) => ActionItem[]` \| `{ list?, replace?, ...ButtonGroupProps }` | 内置默认操作 |
-| onPropertiesAction | 属性面板操作回调；传入则覆盖业务默认处理 | `(key, { entry, selectedEntries, clearSelection, currentPath }) => void` | 内置查看/替换/重命名/下载/移动/复制/删除 |
+| onPropertiesAction | 属性面板操作回调；传入则覆盖业务默认处理 | `(key, { entry, selectedEntries, clearSelection, currentPath }) => void` | 内置查看/替换/重命名/下载/移动/删除 |
 | onFileOpen | 打开文件 | function | 弹窗预览 |
 | onSelectionChange | 选中变化 | function(entries) | - |
 
@@ -243,7 +390,8 @@ render(<BaseExample />);
 
 | 接口 | 方法 | 路径 |
 | --- | --- | --- |
-| folderTree | GET | `{prefix}/folder/tree` |
+| folderTree | GET | `{prefix}/folder/tree`（`kind=folder` 仅文件夹） |
+| folderList | POST | `{prefix}/folder/list`（`parentId` + `currentPage` + `perPage` + 可选 `keyword` → `{ pageData, totalCount }`） |
 | folderMkdir | POST | `{prefix}/folder/mkdir` |
 | folderUpload | POST | `{prefix}/folder/upload` |
 | folderRemove | POST | `{prefix}/folder/remove` |
