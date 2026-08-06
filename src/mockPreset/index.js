@@ -8,6 +8,241 @@ export { fileList };
 let folderNodeSeq = 1;
 const folderStore = new Map();
 
+/** 对齐 react-file 虚拟滚动示例：大目录内 40 文件夹 + 960 文件 */
+const BULK_FOLDER_COUNT = 40;
+const BULK_FILE_COUNT = 960;
+
+/**
+ * 模拟真实后端：首包 ~0.5–0.8s，翻页越往后略慢（offset 查询），大目录再加点耗时。
+ * 故意拉长，方便看 skeleton / 分页加载。
+ */
+const calcFolderListLatencyMs = ({ currentPage = 1, totalHint = 0 } = {}) => {
+  const page = Math.max(1, Number(currentPage) || 1);
+  const base = 520;
+  const pagePenalty = (page - 1) * 90;
+  const bulkPenalty = totalHint >= 200 ? 180 : totalHint >= 50 ? 80 : 0;
+  const jitter = Math.floor(Math.random() * 280);
+  return base + pagePenalty + bulkPenalty + jitter;
+};
+
+/** 供示例页订阅：看每次 folder/list 的 start → done */
+export const folderRequestBus =
+  typeof EventTarget !== 'undefined' ? new EventTarget() : { addEventListener() {}, removeEventListener() {}, dispatchEvent() {} };
+
+const emitFolderRequest = (api, payload) => {
+  const detail = Object.assign({ api, at: Date.now() }, payload);
+  try {
+    folderRequestBus.dispatchEvent(new CustomEvent('request', { detail }));
+  } catch (e) {
+    // ignore
+  }
+  if (typeof console !== 'undefined' && console.info) {
+    const tag = detail.phase ? `${api}:${detail.phase}` : api;
+    console.info(`[mock ${tag}]`, detail.request, detail.response || detail.latencyMs || '');
+  }
+};
+
+const pad = (n, width = 2) => String(n).padStart(width, '0');
+
+/**
+ * 写入「大目录-虚拟滚动」+「多层导航测试」树，供虚拟滚动 / 分栏验证。
+ * demo、admin-file-system 共用，避免业务页 type 默认值测不到大数据。
+ */
+const appendBulkVirtualScrollDemo = (nodes, key, rootId) => {
+  const bulkParent = `folder-bulk-${key}`;
+  nodes.push({
+    id: bulkParent,
+    type: key,
+    name: '大目录-虚拟滚动',
+    parentId: rootId,
+    options: { kind: 'folder' }
+  });
+
+  for (let i = 1; i <= BULK_FOLDER_COUNT; i += 1) {
+    const n = pad(i, 2);
+    const subId = `folder-bulk-sub-${key}-${n}`;
+    nodes.push({
+      id: subId,
+      type: key,
+      name: `folder-${n}`,
+      parentId: bulkParent,
+      options: { kind: 'folder' }
+    });
+
+    // 前 5 个子文件夹再挂 2～3 层，便于测分栏/画廊导航
+    if (i <= 5) {
+      for (let j = 1; j <= 3; j += 1) {
+        const midId = `folder-bulk-mid-${key}-${n}-${j}`;
+        nodes.push({
+          id: midId,
+          type: key,
+          name: `mid-${j}`,
+          parentId: subId,
+          options: { kind: 'folder' }
+        });
+        for (let k = 1; k <= 4; k += 1) {
+          nodes.push({
+            id: `file-bulk-mid-${key}-${n}-${j}-${k}`,
+            type: key,
+            name: `file-${k}.txt`,
+            parentId: midId,
+            options: {
+              kind: 'file',
+              fileId: `file-bulk-mid-id-${key}-${n}-${j}-${k}`,
+              size: 2048 + k,
+              mimetype: 'text/plain',
+              filename: `file-${k}.txt`
+            }
+          });
+        }
+        if (j === 1) {
+          const deepId = `folder-bulk-deep-${key}-${n}`;
+          nodes.push({
+            id: deepId,
+            type: key,
+            name: 'deep',
+            parentId: midId,
+            options: { kind: 'folder' }
+          });
+          for (let k = 1; k <= 12; k += 1) {
+            const kn = pad(k, 2);
+            nodes.push({
+              id: `file-bulk-deep-${key}-${n}-${k}`,
+              type: key,
+              name: `deep-${kn}.txt`,
+              parentId: deepId,
+              options: {
+                kind: 'file',
+                fileId: `file-bulk-deep-id-${key}-${n}-${k}`,
+                size: 4096 + k,
+                mimetype: 'text/plain',
+                filename: `deep-${kn}.txt`
+              }
+            });
+          }
+        }
+      }
+      for (let k = 1; k <= 6; k += 1) {
+        nodes.push({
+          id: `file-bulk-subfile-${key}-${n}-${k}`,
+          type: key,
+          name: `local-${k}.txt`,
+          parentId: subId,
+          options: {
+            kind: 'file',
+            fileId: `file-bulk-subfile-id-${key}-${n}-${k}`,
+            size: 1536 + k,
+            mimetype: 'text/plain',
+            filename: `local-${k}.txt`
+          }
+        });
+      }
+    }
+  }
+
+  for (let i = 1; i <= BULK_FILE_COUNT; i += 1) {
+    const n = pad(i, 4);
+    nodes.push({
+      id: `file-bulk-${key}-${n}`,
+      type: key,
+      name: `file-${n}.txt`,
+      parentId: bulkParent,
+      options: {
+        kind: 'file',
+        fileId: `file-bulk-id-${key}-${n}`,
+        size: 1024 + i,
+        mimetype: 'text/plain',
+        filename: `file-${n}.txt`
+      }
+    });
+  }
+
+  // 独立「多层导航」树：结构更清晰，方便测分栏
+  const nestRoot = `folder-nest-${key}`;
+  nodes.push({
+    id: nestRoot,
+    type: key,
+    name: '多层导航测试',
+    parentId: rootId,
+    options: { kind: 'folder' }
+  });
+  ['设计稿', '交付物', '归档'].forEach((level1Name, li) => {
+    const level1Id = `folder-nest-l1-${key}-${li}`;
+    nodes.push({
+      id: level1Id,
+      type: key,
+      name: level1Name,
+      parentId: nestRoot,
+      options: { kind: 'folder' }
+    });
+    nodes.push({
+      id: `file-nest-l1-${key}-${li}`,
+      type: key,
+      name: `${level1Name}-说明.md`,
+      parentId: level1Id,
+      options: {
+        kind: 'file',
+        fileId: `file-nest-l1-id-${key}-${li}`,
+        size: 512,
+        mimetype: 'text/markdown',
+        filename: `${level1Name}-说明.md`
+      }
+    });
+    const level2Names = li === 0 ? ['移动端', '桌面端', '组件库'] : li === 1 ? ['客户A', '客户B'] : ['2024', '2025'];
+    level2Names.forEach((level2Name, lj) => {
+      const level2Id = `folder-nest-l2-${key}-${li}-${lj}`;
+      nodes.push({
+        id: level2Id,
+        type: key,
+        name: level2Name,
+        parentId: level1Id,
+        options: { kind: 'folder' }
+      });
+      for (let k = 1; k <= 5; k += 1) {
+        nodes.push({
+          id: `file-nest-l2-${key}-${li}-${lj}-${k}`,
+          type: key,
+          name: `${level2Name}-${k}.png`,
+          parentId: level2Id,
+          options: {
+            kind: 'file',
+            fileId: `file-nest-l2-id-${key}-${li}-${lj}-${k}`,
+            size: 8192 + k,
+            mimetype: 'image/png',
+            filename: `${level2Name}-${k}.png`
+          }
+        });
+      }
+      if (li === 0 && lj === 0) {
+        const level3Id = `folder-nest-l3-${key}`;
+        nodes.push({
+          id: level3Id,
+          type: key,
+          name: '切图',
+          parentId: level2Id,
+          options: { kind: 'folder' }
+        });
+        for (let k = 1; k <= 12; k += 1) {
+          const n = pad(k, 2);
+          nodes.push({
+            id: `file-nest-l3-${key}-${n}`,
+            type: key,
+            name: `icon-${n}.svg`,
+            parentId: level3Id,
+            options: {
+              kind: 'file',
+              fileId: `file-nest-l3-id-${key}-${n}`,
+              size: 1024 + k,
+              mimetype: 'image/svg+xml',
+              filename: `icon-${n}.svg`
+            }
+          });
+        }
+      }
+    });
+  });
+};
+
 const ensureFolderType = type => {
   const key = type || 'default';
   if (!folderStore.has(key)) {
@@ -114,6 +349,10 @@ const ensureFolderType = type => {
       }
     ];
 
+    if (key === 'demo' || key === 'admin-file-system') {
+      appendBulkVirtualScrollDemo(nodes, key, rootId);
+    }
+
     if (key === 'preview-ext') {
       nodes.push(
         {
@@ -159,16 +398,22 @@ const toPlainNode = node => ({
   children: node.children
 });
 
-const buildFolderTree = nodes => {
+const buildFolderTree = (nodes, { kind } = {}) => {
   const map = new Map();
   nodes.forEach(node => {
+    if (kind === 'folder' || kind === 'foldersOnly') {
+      const nodeKind = node.options?.kind === 'file' || node.options?.fileId ? 'file' : 'folder';
+      if (nodeKind !== 'folder') {
+        return;
+      }
+    }
     map.set(node.id, Object.assign({}, toPlainNode(node), { children: [] }));
   });
   const roots = [];
   map.forEach(node => {
     if (node.parentId && map.has(node.parentId)) {
       map.get(node.parentId).children.push(node);
-    } else {
+    } else if (!node.parentId || !nodes.some(item => item.id === node.parentId)) {
       roots.push(node);
     }
   });
@@ -183,6 +428,57 @@ const buildFolderTree = nodes => {
       return next;
     });
   return prune(roots);
+};
+
+const getNodeKindMock = node => {
+  const kind = node?.options?.kind;
+  if (kind === 'file' || kind === 'folder') {
+    return kind;
+  }
+  return node?.options?.fileId ? 'file' : 'folder';
+};
+
+const sortSiblingNodes = (left, right) => {
+  const leftIsFolder = getNodeKindMock(left) === 'folder' ? 0 : 1;
+  const rightIsFolder = getNodeKindMock(right) === 'folder' ? 0 : 1;
+  if (leftIsFolder !== rightIsFolder) {
+    return leftIsFolder - rightIsFolder;
+  }
+  return String(left.name || '').localeCompare(String(right.name || ''), undefined, {
+    numeric: true,
+    sensitivity: 'base'
+  });
+};
+
+const listFolderChildren = ({ type, parentId, currentPage = 1, perPage = 20, keyword } = {}) => {
+  const nodes = ensureFolderType(type || 'demo');
+  const parent = parentId || null;
+  let list = nodes.filter(node => (node.parentId || null) === parent);
+  const trimmed = String(keyword || '').trim().toLowerCase();
+  if (trimmed) {
+    list = list.filter(node => String(node.name || '').toLowerCase().indexOf(trimmed) > -1);
+  }
+  list = list.slice().sort(sortSiblingNodes);
+  const page = Math.max(1, Number(currentPage) || 1);
+  const size = Math.min(200, Math.max(1, Number(perPage) || 20));
+  const start = (page - 1) * size;
+  return {
+    pageData: list.slice(start, start + size).map(toPlainNode),
+    totalCount: list.length,
+    /** 调试用：本页在全量中的下标区间（1-based） */
+    range: list.length === 0 ? null : [Math.min(start + 1, list.length), Math.min(start + size, list.length)]
+  };
+};
+
+const countFolderChildren = ({ type, parentId, keyword } = {}) => {
+  const nodes = ensureFolderType(type || 'demo');
+  const parent = parentId || null;
+  let list = nodes.filter(node => (node.parentId || null) === parent);
+  const trimmed = String(keyword || '').trim().toLowerCase();
+  if (trimmed) {
+    list = list.filter(node => String(node.name || '').toLowerCase().indexOf(trimmed) > -1);
+  }
+  return list.length;
 };
 
 const collectDescendants = (nodes, id) => {
@@ -315,9 +611,86 @@ const apis = merge(
         }
       },
       folderTree: {
-        loader: ({ params } = {}) => {
-          const type = params?.type || 'admin-file-system';
-          return buildFolderTree(ensureFolderType(type));
+        loader: async ({ params } = {}) => {
+          const request = {
+            type: params?.type || 'admin-file-system',
+            kind: params?.kind || undefined
+          };
+          await new Promise(resolve => setTimeout(resolve, 180 + Math.floor(Math.random() * 120)));
+          const tree = buildFolderTree(ensureFolderType(request.type), { kind: request.kind });
+          emitFolderRequest('folder/tree', {
+            phase: 'done',
+            request,
+            response: { rootCount: Array.isArray(tree) ? tree.length : 0 }
+          });
+          return tree;
+        }
+      },
+      folderList: {
+        loader: async ({ data } = {}) => {
+          const request = {
+            type: data?.type || 'demo',
+            parentId: data?.parentId || null,
+            currentPage: Number(data?.currentPage) || 1,
+            perPage: Number(data?.perPage) || 20,
+            keyword: data?.keyword || undefined
+          };
+          const parentName =
+            request.parentId == null
+              ? '(root)'
+              : ensureFolderType(request.type).find(item => item.id === request.parentId)?.name || request.parentId;
+          const isBulk = parentName === '大目录-虚拟滚动';
+          const totalHint = countFolderChildren(request);
+          const latencyMs = calcFolderListLatencyMs({
+            currentPage: request.currentPage,
+            totalHint
+          });
+          const requestId = `list-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const startedAt = Date.now();
+
+          emitFolderRequest('folder/list', {
+            phase: 'start',
+            requestId,
+            request,
+            parentName,
+            isBulk,
+            latencyMs,
+            response: {
+              totalHint,
+              expectedRange:
+                totalHint === 0
+                  ? null
+                  : [
+                      Math.min((request.currentPage - 1) * request.perPage + 1, totalHint),
+                      Math.min(request.currentPage * request.perPage, totalHint)
+                    ]
+            }
+          });
+
+          await new Promise(resolve => setTimeout(resolve, latencyMs));
+
+          const result = listFolderChildren(request);
+          const durationMs = Date.now() - startedAt;
+          emitFolderRequest('folder/list', {
+            phase: 'done',
+            requestId,
+            request,
+            parentName,
+            isBulk,
+            latencyMs,
+            durationMs,
+            response: {
+              totalCount: result.totalCount,
+              pageDataLength: result.pageData.length,
+              range: result.range,
+              pageNames: result.pageData.slice(0, 3).map(item => item.name),
+              hasMore: result.range ? result.range[1] < result.totalCount : false
+            }
+          });
+          return {
+            pageData: result.pageData,
+            totalCount: result.totalCount
+          };
         }
       },
       folderMkdir: {

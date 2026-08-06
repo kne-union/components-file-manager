@@ -2,6 +2,7 @@
 
 | 属性名 | 说明 | 类型 | 默认值 |
 | --- | --- | --- | --- |
+| virtualScroll | 是否开启虚拟分页滚动（大目录按需拉页）；默认开启，可传 `false` 回退整树加载 | boolean | `true` |
 | type | 业务域（必填） | string | - |
 | title | 根目录标题 | string | - |
 | folderApis | 自定义文件夹 API | object | 默认走 fileManager.folder* |
@@ -29,7 +30,8 @@
 
 | 接口 | 方法 | 路径 |
 | --- | --- | --- |
-| folderTree | GET | `{prefix}/folder/tree` |
+| folderTree | GET | `{prefix}/folder/tree`（`kind=folder` 仅文件夹） |
+| folderList | POST | `{prefix}/folder/list`（`parentId` + `currentPage` + `perPage` + 可选 `keyword` → `{ pageData, totalCount }`） |
 | folderMkdir | POST | `{prefix}/folder/mkdir` |
 | folderUpload | POST | `{prefix}/folder/upload` |
 | folderRemove | POST | `{prefix}/folder/remove` |

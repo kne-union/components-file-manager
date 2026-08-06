@@ -59,6 +59,25 @@
       ]
     },
     {
+      "title": "虚拟滚动（默认）",
+      "description": "列表默认视图 + 模拟真实 RTT（首包约 0.5–0.8s，翻页更慢）；右侧时间线展示 start→done。进入「大目录-虚拟滚动」滚动观察 skeleton 与分页",
+      "code": "./virtual-scroll.js",
+      "scope": [
+        {
+          "name": "_FileSystem",
+          "packageName": "@components/FileSystem"
+        },
+        {
+          "name": "_mockPreset",
+          "packageName": "@root/mockPreset"
+        },
+        {
+          "name": "remoteLoader",
+          "packageName": "@kne/remote-loader"
+        }
+      ]
+    },
+    {
       "title": "扩展顶部菜单",
       "description": "通过 toolbarExtra 在上传/新建文件夹旁追加自定义操作，可拿到 selectedEntries / reload 等上下文",
       "code": "./toolbar-extra.js",

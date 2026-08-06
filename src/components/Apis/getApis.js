@@ -38,6 +38,10 @@ const getApis = options => {
       url: `${prefix}/folder/tree`,
       method: 'GET'
     },
+    folderList: {
+      url: `${prefix}/folder/list`,
+      method: 'POST'
+    },
     folderMkdir: {
       url: `${prefix}/folder/mkdir`,
       method: 'POST'
