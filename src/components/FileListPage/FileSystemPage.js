@@ -18,7 +18,6 @@ const FileSystemPage = createWithRemoteLoader({
       <Page
         {...pageProps}
         title={pageProps.title || formatMessage({ id: 'PageTitle' })}
-        menuFixed={pageProps.menuFixed !== undefined ? pageProps.menuFixed : false}
         menu={pageProps.menu || <Menu items={menuItems} defaultCurrentKey="filesystem" />}
         noPadding={pageProps.noPadding !== undefined ? pageProps.noPadding : true}
       >

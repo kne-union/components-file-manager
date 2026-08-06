@@ -1,6 +1,6 @@
 {
   "name": "@kne-components/components-file-manager",
-  "version": "0.1.5",
+  "version": "0.1.7",
   "description": "用于管理文件.",
   "scripts": {
     "init": "husky",
@@ -84,6 +84,7 @@
   "dependencies": {
     "@kne/app-children-router": "^0.1.9",
     "@kne/axios-fetch": "^1.2.4",
+    "@kne/react-file-type": "^1.0.9",
     "@kne/react-intl": "^0.1.15"
   }
 }
