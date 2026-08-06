@@ -1,0 +1,31 @@
+const locale = {
+  Files: '文件',
+  UploadFile: '上传文件',
+  CreateFolder: '新建文件夹',
+  FolderName: '文件夹名称',
+  CreateFolderSuccess: '文件夹创建成功',
+  UploadSuccess: '上传成功',
+  FilePreview: '文件预览',
+  BatchOperationsWithCount: '已选:{count}条',
+  CancelSelection: '取消选择',
+  BatchDelete: '删除',
+  BatchDeleteConfirm: '确认删除选中的 {count} 项？',
+  DeleteSuccess: '删除成功',
+  BatchDownloadZip: '压缩包下载',
+  BatchDownloadSuccess: '压缩包下载已开始',
+  BatchDownloadFailed: '压缩包下载失败',
+  BatchDownloadEmpty: '选中项中没有可下载的文件',
+  MoveTo: '移动到',
+  CopyTo: '复制到',
+  TargetFolder: '目标文件夹',
+  RootFolder: '根目录',
+  MoveSuccess: '移动成功',
+  CopySuccess: '复制成功',
+  Rename: '重命名',
+  RenameSuccess: '重命名成功',
+  EntryName: '名称',
+  ReplaceSuccess: '替换成功',
+  ReplaceEmpty: '请选择文件'
+};
+
+export default locale;

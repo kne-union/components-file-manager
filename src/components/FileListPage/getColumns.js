@@ -1,64 +1,86 @@
-const getColumns = ({ preview, getUrl }) => {
+import withLocale from './withLocale';
+import { useIntl } from '@kne/react-intl';
+
+const formatFileSize = size => {
+  if (size === undefined || size === null || size === '') {
+    return '-';
+  }
+  const bytes = Number(size);
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return '-';
+  }
+  if (bytes === 0) {
+    return '0 B';
+  }
+  if (bytes < 1000) {
+    return `${bytes} B`;
+  }
+
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  for (const unit of units) {
+    value /= 1000;
+    if (value < 1000 || unit === 'TB') {
+      const rounded = value >= 100 ? Math.round(value) : value.toFixed(value >= 10 ? 1 : 2).replace(/\.?0+$/, '');
+      return `${rounded} ${unit}`;
+    }
+  }
+  return '-';
+};
+
+const getColumns = ({ preview, getUrl, formatMessage }) => {
   return [
     {
       name: 'id',
-      title: 'ID',
-      type: 'otherSmall',
-      ellipsis: true,
+      title: formatMessage({ id: 'ID' }),
+      renderType: 'id',
       fixed: 'left'
     },
     {
       name: 'filename',
-      title: '文件名',
-      type: 'mainInfo',
-      ellipsis: true,
+      title: formatMessage({ id: 'Filename' }),
+      renderType: 'main',
       onClick: ({ colItem }) => {
         preview(colItem);
       }
     },
     {
       name: 'size',
-      title: '文件大小',
-      type: 'other',
-      valueOf: (item, { name }) => {
-        const unit = ['K', 'M', 'G', 'T'];
-        for (let index = 0; index < unit.length; index++) {
-          const value = item[name] / Math.pow(1024, index + 1);
-          if (value < 1024 || index === unit.length - 1) {
-            return `${value.toLocaleString()}${unit[index]}`;
-          }
-        }
-      }
+      title: formatMessage({ id: 'FileSize' }),
+      getValueOf: item => formatFileSize(item.size)
     },
     {
       name: 'namespace',
-      title: '来源',
-      type: 'other'
+      title: formatMessage({ id: 'Namespace' })
     },
     {
       name: 'mimetype',
-      title: '文件类型',
-      type: 'other',
-      ellipsis: true
+      title: formatMessage({ id: 'MimeType' })
     },
     {
       name: 'url',
-      title: '访问地址',
-      type: 'otherLarge',
-      ellipsis: true,
-      valueOf: item => getUrl(item)
+      title: formatMessage({ id: 'AccessUrl' }),
+      getValueOf: item => getUrl(item),
+      width: 240,
+      ellipsis: true
     },
     {
       name: 'createdAt',
-      title: '创建时间',
-      type: 'datetime'
+      title: formatMessage({ id: 'CreatedAt' }),
+      format: 'datetime'
     },
     {
       name: 'updatedAt',
-      title: '更新时间',
-      type: 'datetime'
+      title: formatMessage({ id: 'UpdatedAt' }),
+      format: 'datetime'
     }
   ];
 };
 
+export const ColumnsLoader = withLocale(({ children }) => {
+  const { formatMessage } = useIntl();
+  return children(props => getColumns(Object.assign({}, props, { formatMessage })));
+});
+
 export default getColumns;
+export { formatFileSize };

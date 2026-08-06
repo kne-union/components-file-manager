@@ -1,0 +1,65 @@
+.toolbarExtra {
+  display: inline-flex;
+  align-items: center;
+}
+
+.galleryFilePreview {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  :global {
+    // 预览组件自带 min-height 时限制在画廊内滚动，避免撑开外层
+    [class*='container'] {
+      max-width: 100%;
+      min-height: 0 !important;
+      height: auto;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
+
+    iframe,
+    video {
+      max-width: 100%;
+    }
+  }
+}
+
+.batchActions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.batchActionsBtn {
+  border: none !important;
+  box-shadow: none !important;
+  background: var(--bg-color-grey-1, #f5f5f5) !important;
+
+  &:not(:disabled):hover {
+    border: none !important;
+    background: var(--bg-color-grey-2, #f0f0f0) !important;
+    color: var(--font-color, rgba(0, 0, 0, 0.88)) !important;
+  }
+}
+
+.batchActionsClearBtn {
+  border: none !important;
+  box-shadow: none !important;
+  background: var(--bg-color-grey-1, #f5f5f5) !important;
+  color: var(--font-color, rgba(0, 0, 0, 0.88)) !important;
+
+  &:not(:disabled):hover {
+    border: none !important;
+    background: var(--bg-color-grey-2, #f0f0f0) !important;
+    color: var(--font-color, rgba(0, 0, 0, 0.88)) !important;
+  }
+}

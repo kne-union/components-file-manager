@@ -1,0 +1,89 @@
+{
+  "isFull": true,
+  "list": [
+    {
+      "title": "基础用法",
+      "description": "指定 type；支持上传、新建文件夹、多选批量与默认属性面板",
+      "code": "./base.js",
+      "scope": [
+        {
+          "name": "_FileSystem",
+          "packageName": "@components/FileSystem"
+        },
+        {
+          "name": "_mockPreset",
+          "packageName": "@root/mockPreset"
+        },
+        {
+          "name": "remoteLoader",
+          "packageName": "@kne/remote-loader"
+        }
+      ]
+    },
+    {
+      "title": "FileSystem.PropertiesPanel",
+      "description": "使用 FileSystem.PropertiesPanel.Default / InfoRow / Section 扩展属性面板显示字段",
+      "code": "./properties-panel.js",
+      "scope": [
+        {
+          "name": "_FileSystem",
+          "packageName": "@components/FileSystem"
+        },
+        {
+          "name": "_mockPreset",
+          "packageName": "@root/mockPreset"
+        },
+        {
+          "name": "remoteLoader",
+          "packageName": "@kne/remote-loader"
+        }
+      ]
+    },
+    {
+      "title": "扩展预览类型",
+      "description": "通过 components-core:File@preset 注册 previewExtensions / previewMapping，扩展 .log、.dwg 等预览（对齐 table-view preset）",
+      "code": "./preview-preset.js",
+      "scope": [
+        {
+          "name": "_FileSystem",
+          "packageName": "@components/FileSystem"
+        },
+        {
+          "name": "_mockPreset",
+          "packageName": "@root/mockPreset"
+        },
+        {
+          "name": "remoteLoader",
+          "packageName": "@kne/remote-loader"
+        }
+      ]
+    },
+    {
+      "title": "扩展顶部菜单",
+      "description": "通过 toolbarExtra 在上传/新建文件夹旁追加自定义操作，可拿到 selectedEntries / reload 等上下文",
+      "code": "./toolbar-extra.js",
+      "scope": [
+        {
+          "name": "_FileSystem",
+          "packageName": "@components/FileSystem"
+        },
+        {
+          "name": "_mockPreset",
+          "packageName": "@root/mockPreset"
+        },
+        {
+          "name": "remoteLoader",
+          "packageName": "@kne/remote-loader"
+        },
+        {
+          "name": "antd",
+          "packageName": "antd"
+        },
+        {
+          "name": "icons",
+          "packageName": "@ant-design/icons"
+        }
+      ]
+    }
+  ]
+}
