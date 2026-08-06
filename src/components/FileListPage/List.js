@@ -4,6 +4,7 @@ import { App, Space } from 'antd';
 import { useIntl } from '@kne/react-intl';
 import withLocale from './withLocale';
 import getColumns from './getColumns';
+import FileMobileList from './FileMobileList';
 import { buildFileListPageMenuItems, buildFolderSelectTree } from './menu';
 
 const List = createWithRemoteLoader({
@@ -218,6 +219,94 @@ const List = createWithRemoteLoader({
       ]
     );
 
+    const getRowActions = useCallback(
+      item => {
+        return [
+          {
+            children: formatMessage({ id: 'Update' }),
+            buttonComponent: Upload.Field,
+            renderTips: () => null,
+            accept: ['*'],
+            showUploadList: false,
+            maxLength: 1,
+            ossUpload: ({ file }) => {
+              return ajax.postForm({
+                url: apis.fileManager.replaceFile.url,
+                params: { id: item.id },
+                data: { file }
+              });
+            },
+            onChange: () => {
+              message.success(formatMessage({ id: 'FileUpdateSuccess' }));
+              ref.current.reload();
+            }
+          },
+          {
+            children: formatMessage({ id: 'Rename' }),
+            onClick: () => {
+              const formModalApi = formModal({
+                title: formatMessage({ id: 'Rename' }),
+                size: 'small',
+                formProps: {
+                  data: { filename: item.filename },
+                  onSubmit: async data => {
+                    const { data: resData } = await ajax(
+                      Object.assign({}, apis.fileManager.renameFile, {
+                        data: { id: item.id, filename: data.filename }
+                      })
+                    );
+
+                    if (resData.code !== 0) {
+                      return;
+                    }
+                    message.success(formatMessage({ id: 'RenameSuccess' }));
+                    formModalApi.close();
+                    ref.current.reload();
+                  }
+                },
+                children: <FormInfo column={1} list={[<Input name="filename" label={formatMessage({ id: 'Filename' })} rule="REQ" />]} />
+              });
+            }
+          },
+          {
+            children: formatMessage({ id: 'Delete' }),
+            confirm: true,
+            onClick: async () => {
+              const { data: resData } = await ajax(
+                Object.assign({}, apis.fileManager.deleteFiles, {
+                  data: { ids: [item.id] }
+                })
+              );
+              if (resData.code !== 0) {
+                return;
+              }
+              message.success(formatMessage({ id: 'DeleteSuccess' }));
+              ref.current.reload();
+            }
+          }
+        ];
+      },
+      [FormInfo, Input, Upload, ajax, apis.fileManager.deleteFiles, apis.fileManager.renameFile, apis.fileManager.replaceFile.url, formModal, formatMessage, message]
+    );
+
+    const renderMobile = useCallback(
+      ({ displayDataSource, dataSource, columns, rowKey, context, empty, renderToolbar, getSelectionProps, getRowKey }) => (
+        <FileMobileList
+          dataSource={displayDataSource || dataSource || []}
+          columns={columns}
+          rowKey={rowKey}
+          context={context}
+          empty={empty}
+          renderToolbar={renderToolbar}
+          getSelectionProps={getSelectionProps}
+          getRowKey={getRowKey}
+          formatMessage={formatMessage}
+          preview={preview}
+        />
+      ),
+      [formatMessage, preview]
+    );
+
     return (
       <TablePage
         isNext
@@ -283,6 +372,7 @@ const List = createWithRemoteLoader({
         ref={ref}
         pagination={{ paramsType: 'data' }}
         name="file-manager-list"
+        renderMobile={renderMobile}
         columns={[
           ...getColumns({ preview, getUrl, formatMessage }),
           {
@@ -290,72 +380,7 @@ const List = createWithRemoteLoader({
             renderType: 'options',
             title: formatMessage({ id: 'Operation' }),
             fixed: 'right',
-            getValueOf: item => {
-              return [
-                {
-                  children: formatMessage({ id: 'Update' }),
-                  buttonComponent: Upload.Field,
-                  renderTips: () => null,
-                  accept: ['*'],
-                  showUploadList: false,
-                  maxLength: 1,
-                  ossUpload: ({ file }) => {
-                    return ajax.postForm({
-                      url: apis.fileManager.replaceFile.url,
-                      params: { id: item.id },
-                      data: { file }
-                    });
-                  },
-                  onChange: () => {
-                    message.success(formatMessage({ id: 'FileUpdateSuccess' }));
-                    ref.current.reload();
-                  }
-                },
-                {
-                  children: formatMessage({ id: 'Rename' }),
-                  onClick: () => {
-                    const formModalApi = formModal({
-                      title: formatMessage({ id: 'Rename' }),
-                      size: 'small',
-                      formProps: {
-                        data: { filename: item.filename },
-                        onSubmit: async data => {
-                          const { data: resData } = await ajax(
-                            Object.assign({}, apis.fileManager.renameFile, {
-                              data: { id: item.id, filename: data.filename }
-                            })
-                          );
-
-                          if (resData.code !== 0) {
-                            return;
-                          }
-                          message.success(formatMessage({ id: 'RenameSuccess' }));
-                          formModalApi.close();
-                          ref.current.reload();
-                        }
-                      },
-                      children: <FormInfo column={1} list={[<Input name="filename" label={formatMessage({ id: 'Filename' })} rule="REQ" />]} />
-                    });
-                  }
-                },
-                {
-                  children: formatMessage({ id: 'Delete' }),
-                  confirm: true,
-                  onClick: async () => {
-                    const { data: resData } = await ajax(
-                      Object.assign({}, apis.fileManager.deleteFiles, {
-                        data: { ids: [item.id] }
-                      })
-                    );
-                    if (resData.code !== 0) {
-                      return;
-                    }
-                    message.success(formatMessage({ id: 'DeleteSuccess' }));
-                    ref.current.reload();
-                  }
-                }
-              ];
-            }
+            getValueOf: item => getRowActions(item)
           }
         ]}
         rowSelection={rowSelection}
