@@ -1,0 +1,31 @@
+const locale = {
+  Files: 'Files',
+  UploadFile: 'Upload',
+  CreateFolder: 'New Folder',
+  FolderName: 'Folder name',
+  CreateFolderSuccess: 'Folder created',
+  UploadSuccess: 'Upload succeeded',
+  FilePreview: 'File preview',
+  BatchOperationsWithCount: 'Selected: {count}',
+  CancelSelection: 'Clear selection',
+  BatchDelete: 'Delete',
+  BatchDeleteConfirm: 'Delete {count} selected item(s)?',
+  DeleteSuccess: 'Deleted successfully',
+  BatchDownloadZip: 'Download ZIP',
+  BatchDownloadSuccess: 'ZIP download started',
+  BatchDownloadFailed: 'Failed to download ZIP',
+  BatchDownloadEmpty: 'No downloadable files in selection',
+  MoveTo: 'Move to',
+  CopyTo: 'Copy to',
+  TargetFolder: 'Target folder',
+  RootFolder: 'Root',
+  MoveSuccess: 'Moved successfully',
+  CopySuccess: 'Copied successfully',
+  Rename: 'Rename',
+  RenameSuccess: 'Renamed successfully',
+  EntryName: 'Name',
+  ReplaceSuccess: 'Replaced successfully',
+  ReplaceEmpty: 'Please choose a file'
+};
+
+export default locale;

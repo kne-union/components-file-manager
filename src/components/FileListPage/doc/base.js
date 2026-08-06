@@ -1,21 +1,34 @@
-const {default: FileListPage} = _FileListPage;
-const {createWithRemoteLoader} = remoteLoader;
-const {getApis} = _Apis;
-const {merge} =lodash;
+const { default: FileListPage } = _FileListPage;
+const { default: mockPreset } = _mockPreset;
+const { createWithRemoteLoader } = remoteLoader;
+const { Route, Routes, Navigate } = reactRouterDom;
+
 const BaseExample = createWithRemoteLoader({
-    modules: ['Global@PureGlobal', 'Global@usePreset', 'Layout']
-})(({remoteModules}) => {
-    const [PureGlobal, usePreset, Layout] = remoteModules;
-    const preset = usePreset();
-    return <PureGlobal preset={merge({}, preset, {
-        apis: {
-            fileManager: getApis()
-        }
-    })}>
-        <Layout navigation={{isFixed: false}}>
-            <FileListPage/>
-        </Layout>
-    </PureGlobal>;
+  modules: ['components-core:Global@PureGlobal', 'components-core:Layout']
+})(({ remoteModules }) => {
+  const [PureGlobal, Layout] = remoteModules;
+  return (
+    <PureGlobal preset={mockPreset}>
+      <Layout navigation={{ isFixed: false }}>
+        <Routes>
+          <Route
+            path="/FileListPage/*"
+            element={
+              <FileListPage
+                baseUrl="/FileListPage"
+                type="admin-file-system"
+                pageProps={{
+                  menuFixed: false,
+                  title: '文件管理'
+                }}
+              />
+            }
+          />
+          <Route path="*" element={<Navigate to="/FileListPage" replace />} />
+        </Routes>
+      </Layout>
+    </PureGlobal>
+  );
 });
 
-render(<BaseExample/>);
+render(<BaseExample />);

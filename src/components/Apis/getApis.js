@@ -29,6 +29,42 @@ const getApis = options => {
     getFileList: {
       url: `${prefix}/file-list`,
       method: 'POST'
+    },
+    downloadFiles: {
+      url: `${prefix}/download-files`,
+      method: 'POST'
+    },
+    folderTree: {
+      url: `${prefix}/folder/tree`,
+      method: 'GET'
+    },
+    folderMkdir: {
+      url: `${prefix}/folder/mkdir`,
+      method: 'POST'
+    },
+    folderUpload: {
+      url: `${prefix}/folder/upload`,
+      method: 'POST'
+    },
+    folderRemove: {
+      url: `${prefix}/folder/remove`,
+      method: 'POST'
+    },
+    folderMove: {
+      url: `${prefix}/folder/move`,
+      method: 'POST'
+    },
+    folderCopy: {
+      url: `${prefix}/folder/copy`,
+      method: 'POST'
+    },
+    folderRename: {
+      url: `${prefix}/folder/rename`,
+      method: 'POST'
+    },
+    folderAddFiles: {
+      url: `${prefix}/folder/add-files`,
+      method: 'POST'
     }
   };
 };

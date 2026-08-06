@@ -1,0 +1,562 @@
+import { globalInit } from '../preset';
+import { getApis } from '@components/Apis';
+import merge from 'lodash/merge';
+import fileList from './file-list.json';
+
+export { fileList };
+
+let folderNodeSeq = 1;
+const folderStore = new Map();
+
+const ensureFolderType = type => {
+  const key = type || 'default';
+  if (!folderStore.has(key)) {
+    const rootId = `folder-seed-${key}`;
+    const nodes = [
+      {
+        id: rootId,
+        type: key,
+        name: '示例文件夹',
+        parentId: null,
+        options: { kind: 'folder' }
+      },
+      {
+        id: `folder-docs-${key}`,
+        type: key,
+        name: '文档',
+        parentId: rootId,
+        options: { kind: 'folder' }
+      },
+      {
+        id: `file-seed-${key}`,
+        type: key,
+        name: 'readme.txt',
+        parentId: rootId,
+        options: {
+          kind: 'file',
+          fileId: `file-id-${key}`,
+          size: 128,
+          mimetype: 'text/plain',
+          filename: 'readme.txt'
+        }
+      },
+      {
+        id: `file-guide-${key}`,
+        type: key,
+        name: '使用说明.pdf',
+        parentId: rootId,
+        options: {
+          kind: 'file',
+          fileId: `file-guide-id-${key}`,
+          size: 204800,
+          mimetype: 'application/pdf',
+          filename: '使用说明.pdf'
+        }
+      },
+      {
+        id: `file-long-name-${key}`,
+        type: key,
+        name: '超长文件名-2024年度第一季度产品规划评审会会议纪要与行动项跟踪清单-最终版-v3.2.1-已确认.pdf',
+        parentId: rootId,
+        options: {
+          kind: 'file',
+          fileId: `file-long-name-id-${key}`,
+          size: 1048576,
+          mimetype: 'application/pdf',
+          filename: '超长文件名-2024年度第一季度产品规划评审会会议纪要与行动项跟踪清单-最终版-v3.2.1-已确认.pdf'
+        }
+      },
+      {
+        id: `folder-long-name-${key}`,
+        type: key,
+        name: '超长文件夹名称-客户交付资料归档-华东区-2024Q1-Q2合并备份',
+        parentId: rootId,
+        options: { kind: 'folder' }
+      },
+      {
+        id: `file-long-en-${key}`,
+        type: key,
+        name: 'very-very-long-english-filename-without-spaces-product-requirements-document-final-review-copy-v12.docx',
+        parentId: rootId,
+        options: {
+          kind: 'file',
+          fileId: `file-long-en-id-${key}`,
+          size: 256000,
+          mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          filename: 'very-very-long-english-filename-without-spaces-product-requirements-document-final-review-copy-v12.docx'
+        }
+      },
+      {
+        id: `file-doc1-${key}`,
+        type: key,
+        name: '会议纪要.docx',
+        parentId: `folder-docs-${key}`,
+        options: {
+          kind: 'file',
+          fileId: `file-doc1-id-${key}`,
+          size: 51200,
+          mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          filename: '会议纪要.docx'
+        }
+      },
+      {
+        id: `file-doc2-${key}`,
+        type: key,
+        name: '报价单.xlsx',
+        parentId: `folder-docs-${key}`,
+        options: {
+          kind: 'file',
+          fileId: `file-doc2-id-${key}`,
+          size: 36864,
+          mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          filename: '报价单.xlsx'
+        }
+      }
+    ];
+
+    if (key === 'preview-ext') {
+      nodes.push(
+        {
+          id: `file-log-${key}`,
+          type: key,
+          name: 'app.log',
+          parentId: rootId,
+          options: {
+            kind: 'file',
+            fileId: `file-log-id-${key}`,
+            size: 256,
+            mimetype: 'text/plain',
+            filename: 'app.log'
+          }
+        },
+        {
+          id: `file-dwg-${key}`,
+          type: key,
+          name: 'plan.dwg',
+          parentId: rootId,
+          options: {
+            kind: 'file',
+            fileId: `file-dwg-id-${key}`,
+            size: 1024,
+            mimetype: 'application/acad',
+            filename: 'plan.dwg'
+          }
+        }
+      );
+    }
+
+    folderStore.set(key, nodes);
+  }
+  return folderStore.get(key);
+};
+
+const toPlainNode = node => ({
+  id: node.id,
+  type: node.type,
+  name: node.name,
+  parentId: node.parentId,
+  options: Object.assign({}, node.options),
+  children: node.children
+});
+
+const buildFolderTree = nodes => {
+  const map = new Map();
+  nodes.forEach(node => {
+    map.set(node.id, Object.assign({}, toPlainNode(node), { children: [] }));
+  });
+  const roots = [];
+  map.forEach(node => {
+    if (node.parentId && map.has(node.parentId)) {
+      map.get(node.parentId).children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+  const prune = list =>
+    list.map(item => {
+      const next = Object.assign({}, item);
+      if (next.children?.length) {
+        next.children = prune(next.children);
+      } else {
+        delete next.children;
+      }
+      return next;
+    });
+  return prune(roots);
+};
+
+const collectDescendants = (nodes, id) => {
+  const childrenMap = new Map();
+  nodes.forEach(node => {
+    const list = childrenMap.get(node.parentId || null) || [];
+    list.push(node);
+    childrenMap.set(node.parentId || null, list);
+  });
+  const result = [];
+  const walk = parentId => {
+    (childrenMap.get(parentId) || []).forEach(child => {
+      result.push(child);
+      walk(child.id);
+    });
+  };
+  const root = nodes.find(item => item.id === id);
+  if (root) {
+    result.push(root);
+    walk(id);
+  }
+  return result;
+};
+
+const paginate = (list, currentPage = 1, perPage = 20) => {
+  const totalCount = list.length;
+  const page = Number(currentPage) || 1;
+  const size = Number(perPage) || 20;
+  const start = (page - 1) * size;
+  return {
+    pageData: list.slice(start, start + size),
+    totalCount
+  };
+};
+
+const filterFileList = ({ data } = {}) => {
+  const { filter = {}, currentPage = 1, perPage = 20 } = Object.assign({}, data);
+  let list = (fileList.data?.pageData || []).slice();
+
+  if (filter.id) {
+    const id = String(filter.id).toLowerCase();
+    list = list.filter(item => String(item.id).toLowerCase().indexOf(id) > -1);
+  }
+  if (filter.filename) {
+    const keyword = String(filter.filename).toLowerCase();
+    list = list.filter(item => String(item.filename).toLowerCase().indexOf(keyword) > -1);
+  }
+  if (filter.namespace) {
+    const namespace = String(filter.namespace).toLowerCase();
+    list = list.filter(item => String(item.namespace).toLowerCase().indexOf(namespace) > -1);
+  }
+  if (Array.isArray(filter.size) && filter.size.length > 0) {
+    const [minK, maxK] = filter.size;
+    list = list.filter(item => {
+      const sizeK = item.size / 1024;
+      if (minK != null && minK !== '' && sizeK < Number(minK)) {
+        return false;
+      }
+      if (maxK != null && maxK !== '' && sizeK > Number(maxK)) {
+        return false;
+      }
+      return true;
+    });
+  }
+  ['createdAt', 'updatedAt'].forEach(name => {
+    if (!filter[name]) {
+      return;
+    }
+    const { startTime, endTime } = filter[name];
+    list = list.filter(item => {
+      const value = item[name];
+      if (!value) {
+        return false;
+      }
+      if (startTime && value < startTime) {
+        return false;
+      }
+      if (endTime && value > endTime) {
+        return false;
+      }
+      return true;
+    });
+  });
+
+  return paginate(list, currentPage, perPage);
+};
+
+const apis = merge(
+  {},
+  {
+    fileManager: getApis()
+  },
+  {
+    fileManager: {
+      getFileList: {
+        loader: props => filterFileList(props)
+      },
+      deleteFiles: {
+        loader: () => ({ success: true })
+      },
+      renameFile: {
+        loader: ({ data }) => ({
+          id: data?.id,
+          filename: data?.filename
+        })
+      },
+      replaceFile: {
+        loader: () => ({ success: true })
+      },
+      upload: {
+        loader: () => ({
+          id: `upload-${Date.now()}`,
+          filename: '新上传文件.pdf',
+          size: 102400,
+          namespace: 'upload',
+          mimetype: 'application/pdf'
+        })
+      },
+      getFile: {
+        loader: ({ urlParams }) => {
+          const id = urlParams?.id;
+          const item = (fileList.data?.pageData || []).find(file => file.id === id);
+          return item || fileList.data.pageData[0];
+        }
+      },
+      getFileUrl: {
+        loader: ({ urlParams }) => {
+          const id = urlParams?.id || 'demo';
+          return { url: `/api/v1/static/file-id/${id}` };
+        }
+      },
+      folderTree: {
+        loader: ({ params } = {}) => {
+          const type = params?.type || 'admin-file-system';
+          return buildFolderTree(ensureFolderType(type));
+        }
+      },
+      folderMkdir: {
+        loader: ({ data } = {}) => {
+          const type = data?.type || 'default';
+          const nodes = ensureFolderType(type);
+          const node = {
+            id: `folder-${Date.now()}-${folderNodeSeq++}`,
+            type,
+            name: data?.name || '新建文件夹',
+            parentId: data?.parentId || null,
+            options: { kind: 'folder' }
+          };
+          nodes.push(node);
+          return toPlainNode(node);
+        }
+      },
+      folderUpload: {
+        loader: ({ params, data } = {}) => {
+          const type = params?.type || data?.type || 'default';
+          const parentId = params?.parentId || data?.parentId || null;
+          const nodes = ensureFolderType(type);
+          const fileId = `file-${Date.now()}-${folderNodeSeq++}`;
+          const filename = data?.file?.name || data?.filename || '新上传文件.pdf';
+          const size = data?.file?.size || data?.size || 102400;
+          const mimetype = data?.file?.type || data?.mimetype || 'application/octet-stream';
+          const node = {
+            id: `node-${Date.now()}-${folderNodeSeq++}`,
+            type,
+            name: filename,
+            parentId,
+            options: {
+              kind: 'file',
+              fileId,
+              size,
+              mimetype,
+              filename
+            }
+          };
+          nodes.push(node);
+          return Object.assign({}, toPlainNode(node), {
+            file: { id: fileId, filename, size, mimetype }
+          });
+        }
+      },
+      folderRemove: {
+        loader: ({ data } = {}) => {
+          const type = data?.type || 'default';
+          const nodes = ensureFolderType(type);
+          const removing = collectDescendants(nodes, data?.id);
+          const removeIds = new Set(removing.map(item => item.id));
+          folderStore.set(
+            type,
+            nodes.filter(item => !removeIds.has(item.id))
+          );
+          return {};
+        }
+      },
+      folderMove: {
+        loader: ({ data } = {}) => {
+          const type = data?.type || 'default';
+          const nodes = ensureFolderType(type);
+          const ids = Array.isArray(data?.ids) ? data.ids : [];
+          const parentId = data?.parentId || null;
+          const idSet = new Set(ids);
+          const results = [];
+          folderStore.set(
+            type,
+            nodes.map(node => {
+              if (!idSet.has(node.id)) {
+                return node;
+              }
+              const next = Object.assign({}, node, { parentId });
+              results.push(toPlainNode(next));
+              return next;
+            })
+          );
+          return results;
+        }
+      },
+      folderCopy: {
+        loader: ({ data } = {}) => {
+          const type = data?.type || 'admin-file-system';
+          const nodes = ensureFolderType(type);
+          const ids = Array.isArray(data?.ids) ? data.ids : [];
+          const parentId = data?.parentId || null;
+          const byId = new Map(nodes.map(node => [node.id, node]));
+          const results = [];
+          const cloneSubtree = (sourceId, nextParentId) => {
+            const source = byId.get(sourceId);
+            if (!source) {
+              return;
+            }
+            const newId = `folder-${Date.now()}-${folderNodeSeq++}`;
+            const next = Object.assign({}, toPlainNode(source), {
+              id: newId,
+              parentId: nextParentId,
+              options: Object.assign({}, source.options, source.options?.kind === 'file' ? { linked: true } : {})
+            });
+            nodes.push(next);
+            results.push(next);
+            nodes
+              .filter(item => item.parentId === sourceId)
+              .forEach(child => cloneSubtree(child.id, newId));
+          };
+          ids.forEach(id => cloneSubtree(id, parentId));
+          folderStore.set(type, nodes.slice());
+          return results;
+        }
+      },
+      folderRename: {
+        loader: ({ data } = {}) => {
+          const type = data?.type || 'default';
+          const nodes = ensureFolderType(type);
+          let result = null;
+          folderStore.set(
+            type,
+            nodes.map(node => {
+              if (node.id !== data?.id) {
+                return node;
+              }
+              const next = Object.assign({}, node, { name: data?.name || node.name });
+              result = toPlainNode(next);
+              return next;
+            })
+          );
+          return result;
+        }
+      },
+      folderAddFiles: {
+        loader: ({ data } = {}) => {
+          const type = data?.type || 'admin-file-system';
+          const parentId = data?.parentId || null;
+          const ids = [...new Set((Array.isArray(data?.ids) ? data.ids : []).filter(Boolean).map(String))];
+          const nodes = ensureFolderType(type);
+          const pageData = fileList.data?.pageData || [];
+          const existingFileIds = new Set(
+            nodes
+              .filter(node => node.parentId === parentId && node.options?.kind === 'file' && node.options?.fileId)
+              .map(node => String(node.options.fileId))
+          );
+          const results = [];
+          ids.forEach(fileId => {
+            if (existingFileIds.has(String(fileId))) {
+              return;
+            }
+            const file = pageData.find(item => item.id === fileId) || {
+              id: fileId,
+              filename: `linked-${fileId}.bin`,
+              size: 1024,
+              mimetype: 'application/octet-stream'
+            };
+            const node = {
+              id: `linked-${Date.now()}-${folderNodeSeq++}`,
+              type,
+              name: file.filename,
+              parentId,
+              options: {
+                kind: 'file',
+                fileId: file.id,
+                size: file.size,
+                mimetype: file.mimetype,
+                filename: file.filename,
+                linked: true
+              }
+            };
+            nodes.push(node);
+            existingFileIds.add(String(file.id));
+            results.push(toPlainNode(node));
+          });
+          return results;
+        }
+      }
+    }
+  }
+);
+
+const ajax = async ({ loader, ...props }) => {
+  if (props.responseType === 'blob' && /download-files/.test(props.url || '')) {
+    // 最小合法空 zip（EOCD）
+    const emptyZip = new Uint8Array([0x50, 0x4b, 0x05, 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    return {
+      data: new Blob([emptyZip], { type: 'application/zip' }),
+      headers: { 'content-disposition': 'attachment; filename="files.zip"' }
+    };
+  }
+  if (!loader && props.url) {
+    const { ajax: realAjax } = await globalInit();
+    return realAjax({ loader, ...props });
+  }
+  const result = loader ? await loader(props) : {};
+  return { data: { code: 0, data: result } };
+};
+
+ajax.postForm = async ({ url, params, data } = {}) => {
+  if (url && /folder\/upload/.test(url)) {
+    const result = await apis.fileManager.folderUpload.loader({ params, data });
+    return { data: { code: 0, data: result } };
+  }
+  if (url && /replace-file/.test(url)) {
+    return {
+      data: {
+        code: 0,
+        data: {
+          id: params?.id || `file-${Date.now()}`,
+          filename: data?.file?.name || 'replaced.bin',
+          size: data?.file?.size || 1024,
+          mimetype: data?.file?.type || 'application/octet-stream'
+        }
+      }
+    };
+  }
+  return {
+    data: {
+      code: 0,
+      data: {
+        id: `upload-${Date.now()}`,
+        filename: data?.file?.name || '新上传文件.pdf',
+        size: data?.file?.size || 102400,
+        namespace: 'upload',
+        mimetype: data?.file?.type || 'application/octet-stream'
+      }
+    }
+  };
+};
+
+const preset = {
+  ajax,
+  apis,
+  ossUpload: async ({ file }) =>
+    ajax.postForm({
+      url: '/api/v1/static/upload',
+      data: { file }
+    }),
+  staticUrl: '',
+  themeToken: {
+    colorPrimary: '#4F185A',
+    colorPrimaryHover: '#702280'
+  }
+};
+
+export default preset;

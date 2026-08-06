@@ -1,9 +1,9 @@
 {
-  "isFull": false,
+  "isFull": true,
   "list": [
     {
-      "title": "这里填写示例标题",
-      "description": "这里填写示例说明",
+      "title": "基础用法",
+      "description": "完整文件管理页面：左侧「文件库 / 文件系统」菜单；文件库支持关键词搜索、多条件筛选、预览下载、重命名、替换上传、单条删除、批量删除、批量下载压缩包、批量加入文件系统",
       "code": "./base.js",
       "scope": [
         {
@@ -11,12 +11,50 @@
           "packageName": "@components/FileListPage"
         },
         {
-          "name": "lodash",
-          "packageName": "lodash"
+          "name": "_mockPreset",
+          "packageName": "@root/mockPreset"
         },
         {
-          "name": "_Apis",
-          "packageName": "@components/Apis"
+          "name": "remoteLoader",
+          "packageName": "@kne/remote-loader"
+        },
+        {
+          "name": "reactRouterDom",
+          "packageName": "react-router-dom"
+        }
+      ]
+    },
+    {
+      "title": "列表页 List",
+      "description": "直接使用 List 子组件渲染文件列表，适合嵌入已有路由、不需要 AppChildrenRouter 包裹的场景",
+      "code": "./list.js",
+      "scope": [
+        {
+          "name": "_FileListPage",
+          "packageName": "@components/FileListPage"
+        },
+        {
+          "name": "_mockPreset",
+          "packageName": "@root/mockPreset"
+        },
+        {
+          "name": "remoteLoader",
+          "packageName": "@kne/remote-loader"
+        }
+      ]
+    },
+    {
+      "title": "表格列配置",
+      "description": "使用 getColumns 获取文件列表列配置，可自定义国际化文案、预览与访问地址生成逻辑",
+      "code": "./get-columns.js",
+      "scope": [
+        {
+          "name": "_FileListPage",
+          "packageName": "@components/FileListPage"
+        },
+        {
+          "name": "_mockPreset",
+          "packageName": "@root/mockPreset"
         },
         {
           "name": "remoteLoader",
