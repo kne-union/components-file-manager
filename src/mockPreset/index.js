@@ -711,8 +711,30 @@ const apis = merge(
       folderUpload: {
         loader: ({ params, data } = {}) => {
           const type = params?.type || data?.type || 'default';
-          const parentId = params?.parentId || data?.parentId || null;
+          const folderPath = params?.path !== undefined ? params.path : data?.path;
+          const segments = String(folderPath || '')
+            .replace(/\\/g, '/')
+            .split('/')
+            .map(segment => segment.trim())
+            .filter(segment => segment && segment !== '.' && segment !== '..');
+          let parentId = null;
           const nodes = ensureFolderType(type);
+          for (const name of segments) {
+            let existing = nodes.find(
+              item => (item.parentId || null) === parentId && item.name === name && item.options?.kind === 'folder'
+            );
+            if (!existing) {
+              existing = {
+                id: `folder-${Date.now()}-${folderNodeSeq++}`,
+                type,
+                name,
+                parentId,
+                options: { kind: 'folder' }
+              };
+              nodes.push(existing);
+            }
+            parentId = existing.id;
+          }
           const fileId = `file-${Date.now()}-${folderNodeSeq++}`;
           const filename = data?.file?.name || data?.filename || '新上传文件.pdf';
           const size = data?.file?.size || data?.size || 102400;
