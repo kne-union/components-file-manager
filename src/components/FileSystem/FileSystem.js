@@ -57,10 +57,10 @@ const createDefaultFolderApis = ({ ajax, apis, type }) => ({
     );
     return resData;
   },
-  uploadFile: async ({ file, parentId }) => {
+  uploadFile: async ({ file, path = '' }) => {
     return ajax.postForm({
       url: apis.fileManager.folderUpload.url,
-      params: { type, parentId: parentId || undefined },
+      params: { type, path },
       data: { file }
     });
   },
@@ -322,7 +322,7 @@ const FileSystemPagedBody = ({
                 try {
                   const response = await folderApis.uploadFile({
                     file,
-                    parentId: resolveParentId()
+                    path: currentPath || ''
                   });
                   if (response?.data?.code != null && response.data.code !== 0) {
                     onError?.(new Error('upload failed'));
@@ -903,7 +903,7 @@ const FileSystem = createWithRemoteLoader({
                           try {
                             const response = await folderApis.uploadFile({
                               file,
-                              parentId: resolveParentId()
+                              path: currentPath || ''
                             });
                             if (response?.data?.code != null && response.data.code !== 0) {
                               onError?.(new Error('upload failed'));

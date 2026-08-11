@@ -33,7 +33,7 @@
 | folderTree | GET | `{prefix}/folder/tree`（`kind=folder` 仅文件夹） |
 | folderList | POST | `{prefix}/folder/list`（`parentId` + `currentPage` + `perPage` + 可选 `keyword` → `{ pageData, totalCount }`） |
 | folderMkdir | POST | `{prefix}/folder/mkdir` |
-| folderUpload | POST | `{prefix}/folder/upload` |
+| folderUpload | POST | `{prefix}/folder/upload`（query：`path`，空为根目录） |
 | folderRemove | POST | `{prefix}/folder/remove` |
 | folderMove | POST | `{prefix}/folder/move` |
 | folderCopy | POST | `{prefix}/folder/copy` |
