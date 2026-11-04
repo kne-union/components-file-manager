@@ -14,9 +14,9 @@ const getApis = options => {
       url: `${prefix}/file-id/{id}`,
       method: 'GET'
     },
-    getThumbnail: {
-      url: `${prefix}/thumbnail/{id}`,
-      method: 'GET'
+    getThumbnails: {
+      url: `${prefix}/thumbnails`,
+      method: 'POST'
     },
     deleteFiles: {
       url: `${prefix}/delete-files`,

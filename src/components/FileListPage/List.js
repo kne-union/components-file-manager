@@ -39,7 +39,7 @@ const List = createWithRemoteLoader({
     const formModal = useFormModal();
     const { Input, Upload, TreeSelect } = FormInfo.fields;
     const menuItems = buildFileListPageMenuItems({ baseUrl, formatMessage });
-    const thumbnailLoader = useMemo(() => getThumbnailLoader({ ajax, url: apis.fileManager?.getThumbnail?.url }), [ajax, apis.fileManager]);
+    const thumbnailLoader = useMemo(() => getThumbnailLoader({ ajax, url: apis.fileManager?.getThumbnails?.url }), [ajax, apis.fileManager]);
     const { selectedRowKeys, selectedRows, setSelectedRowKeys, clearSelectedRows } = Table.useSelectedRow({
       rowKey: 'id'
     });

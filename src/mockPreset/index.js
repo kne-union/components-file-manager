@@ -890,17 +890,12 @@ const apis = merge(
   }
 );
 
-/** 按 id 生成 50x50 色块；约 1/3 返回 404 演示回退为类型图标 */
-const mockThumbnail = async url => {
-  const id = decodeURIComponent((url.match(/thumbnail\/([^/?#]+)/) || [])[1] || '');
-  const hash = Array.from(id).reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 7);
-  await new Promise(resolve => setTimeout(resolve, 150 + (hash % 300)));
-  if (hash % 3 === 0) {
-    return {
-      status: 404,
-      data: new Blob([JSON.stringify({ statusCode: 404, error: 'Not Found', message: '该文件不支持缩略图' })], { type: 'application/json' })
-    };
-  }
+/** 按 id 生成 50x50 色块 data URL；约 1/3 返回 none，约 1/9 返回 pending（重试 2 次后成功） */
+const thumbnailRetries = new Map();
+
+const hashThumbnailId = id => Array.from(String(id)).reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 7);
+
+const createThumbnailDataUrl = hash => {
   const canvas = document.createElement('canvas');
   canvas.width = 50;
   canvas.height = 50;
@@ -910,13 +905,30 @@ const mockThumbnail = async url => {
   gradient.addColorStop(1, `hsl(${(hash + 120) % 360}, 70%, 45%)`);
   context.fillStyle = gradient;
   context.fillRect(0, 0, 50, 50);
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-  return { status: 200, data: blob };
+  return canvas.toDataURL('image/png');
+};
+
+const mockThumbnails = async ids => {
+  await new Promise(resolve => setTimeout(resolve, 150 + Math.floor(Math.random() * 250)));
+  return ids.reduce((result, id) => {
+    const hash = hashThumbnailId(id);
+    const roll = hash % 9;
+    const retries = thumbnailRetries.get(id) || 0;
+    if (roll < 3) {
+      result[id] = { status: 'none' };
+    } else if (roll === 3 && retries < 2) {
+      thumbnailRetries.set(id, retries + 1);
+      result[id] = { status: 'pending' };
+    } else {
+      result[id] = { status: 'ok', data: createThumbnailDataUrl(hash) };
+    }
+    return result;
+  }, {});
 };
 
 const ajax = async ({ loader, ...props }) => {
-  if (props.responseType === 'blob' && /\/thumbnail\//.test(props.url || '')) {
-    return mockThumbnail(props.url);
+  if (props.method === 'POST' && /\/thumbnails$/.test(props.url || '')) {
+    return { data: { code: 0, data: await mockThumbnails(props.data?.ids || []) } };
   }
   if (props.responseType === 'blob' && /download-files/.test(props.url || '')) {
     // 最小合法空 zip（EOCD）

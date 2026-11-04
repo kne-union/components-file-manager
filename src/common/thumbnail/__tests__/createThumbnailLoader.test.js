@@ -1,108 +1,198 @@
 import createThumbnailLoader from '../createThumbnailLoader';
 
-const URL_TPL = '/api/v1/static/thumbnail/{id}';
+const BATCH_URL = '/api/v1/static/thumbnails';
 
-const imageResponse = () => ({ status: 200, data: new Blob(['x'], { type: 'image/webp' }) });
-const jsonResponse = (status, body, headers) => ({
-  status,
-  headers,
-  data: new Blob([JSON.stringify(body)], { type: 'application/json' })
-});
+const DATA_URL = 'data:image/webp;base64,dGVzdA==';
+const PENDING_RETRY_DELAY = 1000;
+
+const okResponse = data => ({ status: 200, data: { code: 0, data } });
+
+// 一批里每个 id 都是 ok
+const allOk = ids =>
+  okResponse(
+    ids.reduce((result, id) => {
+      result[id] = { status: 'ok', data: DATA_URL };
+      return result;
+    }, {})
+  );
 
 const load = (loader, id) => new Promise(resolve => loader.request(id, resolve));
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
-beforeAll(() => {
-  let seq = 0;
-  URL.createObjectURL = () => `blob:thumb-${++seq}`;
-  URL.revokeObjectURL = () => {};
-});
+// 推进假定时器并让 ajax / promise 链的微任务跑完。
+// advanceTimersByTime 不会执行本次推进期间新排的定时器（如收集用的 0ms 定时器），所以要再补几轮 0 推进。
+const tick = async (ms = PENDING_RETRY_DELAY) => {
+  for (let i = 0; i < 4; i++) {
+    jest.advanceTimersByTime(i === 0 ? ms : 0);
+    for (let j = 0; j < 4; j++) {
+      await Promise.resolve();
+    }
+  }
+};
 
-test('成功返回 objectURL，并缓存结果', async () => {
-  const ajax = jest.fn(async () => imageResponse());
-  const loader = createThumbnailLoader({ ajax, url: URL_TPL });
-  const src = await load(loader, 'a/b');
-  expect(src).toMatch(/^blob:/);
-  expect(ajax).toHaveBeenCalledWith(expect.objectContaining({ url: '/api/v1/static/thumbnail/a%2Fb', responseType: 'blob', showError: false }));
-  expect(loader.peek('a/b')).toBe(src);
-  await load(loader, 'a/b');
+test('同一轮渲染内的多个 id 合并为一次请求', async () => {
+  const ajax = jest.fn(async ({ data }) => allOk(data.ids));
+  const loader = createThumbnailLoader({ ajax, url: BATCH_URL });
+  const results = await Promise.all(['a', 'b', 'c'].map(id => load(loader, id)));
+
+  expect(results).toEqual([DATA_URL, DATA_URL, DATA_URL]);
   expect(ajax).toHaveBeenCalledTimes(1);
+  expect(ajax).toHaveBeenCalledWith(expect.objectContaining({ url: BATCH_URL, method: 'POST', data: { ids: ['a', 'b', 'c'] }, showError: false }));
+  expect(loader.peek('a')).toBe(DATA_URL);
 });
 
-test('业务 404 只回退当前文件', async () => {
-  const ajax = jest.fn(async ({ url }) => (url.endsWith('/bad') ? jsonResponse(404, { message: '该文件不支持缩略图' }) : imageResponse()));
-  const loader = createThumbnailLoader({ ajax, url: URL_TPL });
+test('相同 id 只出现在请求里一次', async () => {
+  const ajax = jest.fn(async ({ data }) => allOk(data.ids));
+  const loader = createThumbnailLoader({ ajax, url: BATCH_URL });
+  await Promise.all([load(loader, 'a'), load(loader, 'a'), load(loader, 'a')]);
+  expect(ajax).toHaveBeenCalledTimes(1);
+  expect(ajax.mock.calls[0][0].data.ids).toEqual(['a']);
+});
+
+test('超过 10 个拆成多个批次，同时在途不超过 2 个', async () => {
+  const resolvers = [];
+  const ajax = jest.fn(
+    ({ data }) =>
+      new Promise(resolve => {
+        resolvers.push(() => resolve(allOk(data.ids)));
+      })
+  );
+  const loader = createThumbnailLoader({ ajax, url: BATCH_URL });
+  Array.from({ length: 25 }, (_, i) => loader.request(`id-${i}`, () => {}));
+  await flush();
+
+  expect(ajax).toHaveBeenCalledTimes(2);
+  expect(ajax.mock.calls[0][0].data.ids).toHaveLength(10);
+  expect(ajax.mock.calls[1][0].data.ids).toHaveLength(10);
+
+  // 前两批仍在途时不会发第三批
+  expect(ajax).toHaveBeenCalledTimes(2);
+
+  resolvers.splice(0).forEach(resolve => resolve());
+  await flush();
+  expect(ajax).toHaveBeenCalledTimes(3);
+  expect(ajax.mock.calls[2][0].data.ids).toHaveLength(5);
+});
+
+test('none 记为无缩略图且不再请求', async () => {
+  const ajax = jest.fn(async ({ data }) =>
+    okResponse(
+      data.ids.reduce((result, id) => {
+        result[id] = id === 'bad' ? { status: 'none' } : { status: 'ok', data: DATA_URL };
+        return result;
+      }, {})
+    )
+  );
+  const loader = createThumbnailLoader({ ajax, url: BATCH_URL });
   expect(await load(loader, 'bad')).toBeNull();
-  expect(await load(loader, 'good')).toMatch(/^blob:/);
-  expect(loader.isDisabled()).toBe(false);
-});
+  expect(loader.peek('bad')).toBeNull();
 
-test('路由不存在时整体停用，不再请求', async () => {
-  const ajax = jest.fn(async () => jsonResponse(404, { message: 'Route GET:/api/v1/static/thumbnail/1 not found', statusCode: 404 }));
-  const loader = createThumbnailLoader({ ajax, url: URL_TPL });
-  expect(await load(loader, '1')).toBeNull();
-  expect(loader.isDisabled()).toBe(true);
-  expect(await load(loader, '2')).toBeNull();
+  expect(await load(loader, 'bad')).toBeNull();
   expect(ajax).toHaveBeenCalledTimes(1);
 });
 
-test('200 但不是图片（如 index.html 回退）时整体停用', async () => {
-  const ajax = jest.fn(async () => ({ status: 200, data: new Blob(['<html>'], { type: 'text/html' }) }));
-  const loader = createThumbnailLoader({ ajax, url: URL_TPL });
-  expect(await load(loader, '1')).toBeNull();
-  expect(loader.isDisabled()).toBe(true);
-});
-
-test('没有配置接口时直接回退', async () => {
-  const loader = createThumbnailLoader({ ajax: jest.fn(), url: undefined });
-  expect(await load(loader, '1')).toBeNull();
-  expect(loader.peek('1')).toBeNull();
-});
-
-test('503 按 Retry-After 重试', async () => {
+test('pending 1 秒后重试，成功后缓存', async () => {
   jest.useFakeTimers();
   try {
     let calls = 0;
-    const ajax = jest.fn(async () => (++calls === 1 ? jsonResponse(503, { message: 'busy' }, { 'retry-after': '1' }) : imageResponse()));
-    const loader = createThumbnailLoader({ ajax, url: URL_TPL });
-    const promise = load(loader, '1');
-    for (let i = 0; i < 5 && ajax.mock.calls.length < 2; i++) {
-      await Promise.resolve();
-      jest.advanceTimersByTime(1000);
+    const ajax = jest.fn(async ({ data }) => {
+      calls++;
+      return okResponse(
+        data.ids.reduce((result, id) => {
+          result[id] = calls === 1 ? { status: 'pending' } : { status: 'ok', data: DATA_URL };
+          return result;
+        }, {})
+      );
+    });
+    const loader = createThumbnailLoader({ ajax, url: BATCH_URL });
+    const promise = load(loader, 'a');
+    for (let i = 0; i < 4; i++) {
+      await tick();
     }
-    expect(await promise).toMatch(/^blob:/);
+
+    expect(await promise).toBe(DATA_URL);
     expect(ajax).toHaveBeenCalledTimes(2);
   } finally {
     jest.useRealTimers();
   }
 });
 
-test('从未成功且连续网络错误达到阈值时停用', async () => {
+test('pending 重试 5 次后按无缩略图处理', async () => {
+  jest.useFakeTimers();
+  try {
+    const ajax = jest.fn(async ({ data }) => okResponse(data.ids.reduce((result, id) => ({ ...result, [id]: { status: 'pending' } }), {})));
+    const loader = createThumbnailLoader({ ajax, url: BATCH_URL });
+    let settled = false;
+    const promise = load(loader, 'a').then(value => {
+      settled = true;
+      return value;
+    });
+    for (let i = 0; i < 20 && !settled; i++) {
+      await tick();
+    }
+    expect(await promise).toBeNull();
+    // 首次请求 + 5 次重试
+    expect(ajax).toHaveBeenCalledTimes(6);
+    expect(loader.isDisabled()).toBe(false);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('批量接口 404（旧版服务端）时整体停用，只发一次请求', async () => {
+  const ajax = jest.fn(async () => ({
+    status: 404,
+    data: { statusCode: 404, error: 'Not Found', message: 'Route POST:/api/v1/static/thumbnails not found' }
+  }));
+  const loader = createThumbnailLoader({ ajax, url: BATCH_URL });
+  expect(await load(loader, 'a')).toBeNull();
+  expect(loader.isDisabled()).toBe(true);
+  expect(await load(loader, 'b')).toBeNull();
+  expect(ajax).toHaveBeenCalledTimes(1);
+});
+
+test('返回非 JSON（如 index.html 回退）或 code 不为 0 时整体停用', async () => {
+  for (const body of ['<html></html>', { code: 500, msg: 'error' }]) {
+    const ajax = jest.fn(async () => ({ status: 200, data: body }));
+    const loader = createThumbnailLoader({ ajax, url: BATCH_URL });
+    expect(await load(loader, 'a')).toBeNull();
+    expect(loader.isDisabled()).toBe(true);
+  }
+});
+
+test('网络错误时不写长期缓存，下次仍会重试', async () => {
   const ajax = jest.fn(async () => {
     throw new Error('network');
   });
-  const loader = createThumbnailLoader({ ajax, url: URL_TPL });
-  const results = await Promise.all(['1', '2', '3', '4', '5', '6'].map(id => load(loader, id)));
-  expect(results.every(value => value === null)).toBe(true);
-  expect(loader.isDisabled()).toBe(true);
-  expect(ajax.mock.calls.length).toBeLessThanOrEqual(6);
+  const loader = createThumbnailLoader({ ajax, url: BATCH_URL });
+  expect(await load(loader, 'a')).toBeNull();
+  expect(loader.peek('a')).toBeUndefined();
+  expect(loader.isDisabled()).toBe(false);
 });
 
-test('最多 10 个并发，未开始的请求可取消', async () => {
-  const pending = [];
-  const ajax = jest.fn(() => new Promise(resolve => pending.push(resolve)));
-  const loader = createThumbnailLoader({ ajax, url: URL_TPL });
-  const cancels = Array.from({ length: 12 }, (_, i) => loader.request(String(i), () => {}));
-  expect(ajax).toHaveBeenCalledTimes(10);
+test('从未成功且连续 5 次网络错误后停用', async () => {
+  const ajax = jest.fn(async () => {
+    throw new Error('network');
+  });
+  const loader = createThumbnailLoader({ ajax, url: BATCH_URL });
+  for (let i = 0; i < 5; i++) {
+    await load(loader, String(i));
+  }
+  expect(loader.isDisabled()).toBe(true);
+});
 
-  cancels[11]();
-  pending.shift()(imageResponse());
-  await flush();
-  expect(ajax).toHaveBeenCalledTimes(11);
-  expect(ajax.mock.calls[10][0].url).toMatch(/\/10$/);
+test('没有配置接口时直接回退', async () => {
+  const loader = createThumbnailLoader({ ajax: jest.fn(), url: undefined });
+  expect(await load(loader, 'a')).toBeNull();
+  expect(loader.peek('a')).toBeNull();
+});
 
-  pending.splice(0).forEach(resolve => resolve(imageResponse()));
+test('未发送的请求在取消订阅后不会再发出去', async () => {
+  const ajax = jest.fn(async ({ data }) => allOk(data.ids));
+  const loader = createThumbnailLoader({ ajax, url: BATCH_URL });
+  const cancel = loader.request('a', () => {});
+  cancel();
   await flush();
-  expect(ajax).toHaveBeenCalledTimes(11);
+  expect(ajax).not.toHaveBeenCalled();
 });
