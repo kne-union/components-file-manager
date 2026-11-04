@@ -8,6 +8,14 @@
   box-sizing: border-box;
 }
 
+img.filenameThumbnail {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
 .fileSystemFill {
   flex: 1;
   width: 100%;

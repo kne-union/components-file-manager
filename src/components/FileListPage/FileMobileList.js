@@ -4,6 +4,7 @@ import get from 'lodash/get';
 import { createWithRemoteLoader } from '@kne/remote-loader';
 import FileType from '@kne/react-file-type';
 import { formatFileSize } from './getColumns';
+import { Thumbnail } from '../../common/thumbnail';
 import style from './FileMobileList.module.scss';
 
 const resolveRowId = (item, rowKey = 'id') => get(item, typeof rowKey === 'function' ? rowKey(item) : rowKey);
@@ -64,7 +65,8 @@ const FileMobileList = createWithRemoteLoader({
     getSelectionProps,
     getRowKey,
     formatMessage,
-    preview
+    preview,
+    thumbnailLoader
   }) => {
     const [ButtonGroup] = remoteModules;
     const optionsColumn = resolveOptionsColumn(columns);
@@ -111,7 +113,7 @@ const FileMobileList = createWithRemoteLoader({
                     preview?.(item);
                   }}
                 >
-                  <FileType type={fileType} size={36} />
+                  <Thumbnail loader={thumbnailLoader} id={item?.id} fallback={<FileType type={fileType} size={36} />} />
                 </div>
 
                 <div className={style.body}>

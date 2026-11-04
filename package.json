@@ -1,6 +1,6 @@
 {
   "name": "@kne-components/components-file-manager",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "用于管理文件.",
   "scripts": {
     "init": "husky",
@@ -63,12 +63,12 @@
     }
   },
   "devDependencies": {
-    "@craco/craco": "^7.1.0",
-    "@kne/modules-dev": "^2.0.14",
-    "@kne/react-fetch": "^1.4.3",
-    "@kne/remote-loader": "^1.2.3",
+    "@kne/craco": "^7.1.4",
+    "@kne/modules-dev": "^2.4.19",
+    "@kne/react-fetch": "^1.5.7",
+    "@kne/remote-loader": "^1.5.0",
     "@testing-library/jest-dom": "^6.4.2",
-    "antd": "^5.14.2",
+    "antd": "^6.6.8",
     "axios": "^1.6.7",
     "classnames": "^2.5.1",
     "cross-env": "^7.0.3",
@@ -76,15 +76,15 @@
     "husky": "^9.0.11",
     "lodash": "^4.17.21",
     "prettier": "^3.2.5",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^6.30.6",
     "sass": "^1.75.0"
   },
   "dependencies": {
     "@kne/app-children-router": "^0.1.9",
     "@kne/axios-fetch": "^1.2.4",
     "@kne/react-file-type": "^1.0.9",
-    "@kne/react-intl": "^0.1.15"
+    "@kne/react-intl": "^0.1.16"
   }
 }

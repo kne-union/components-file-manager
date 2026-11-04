@@ -40,6 +40,12 @@
 | folderRename | POST | `{prefix}/folder/rename` |
 | folderAddFiles | POST | `{prefix}/folder/add-files` |
 
+#### 缩略图
+
+`fileManager.getThumbnail`（GET `{prefix}/thumbnail/{id}`，需 `@kne/fastify-file-manager` ≥ 3.1.0）存在时，文件图标替换为服务端缩略图，最多 10 个并发请求。依赖核心 FileSystem 支持 `renderEntryIcon`（`components-core` 未支持时自动忽略）。
+
+静默回退：加载中、单个文件 404 / 失败时显示原类型图标；接口路由不存在、返回非图片或服务持续不可用时，本页面内停止请求；均不弹错误提示。
+
 节点：`options.kind` 为 `file` \| `folder`；文件节点含 `options.fileId`。`options.linked: true` 表示挂载自文件库（删除树节点不删文件实体）。
 
 后端文件夹鉴权使用 `getAuthenticate(action)`，在 hook 内读取 `request` 的 `type`。
