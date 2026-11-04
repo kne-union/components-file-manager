@@ -7,6 +7,7 @@ import { useIntl } from '@kne/react-intl';
 import withLocale from './withLocale';
 import mapTreeToItems from './mapTreeToItems';
 import useFolderPageCache from './useFolderPageCache';
+import { Thumbnail, getThumbnailLoader } from '../../common/thumbnail';
 import style from './style.module.scss';
 
 // 与 @kne/react-file FilePreview 默认可预览后缀对齐
@@ -196,6 +197,7 @@ const FileSystemPagedBody = ({
   renderFilePreview,
   canPreviewFile,
   getEntryStatus,
+  renderEntryIcon,
   propertiesActions,
   onPropertiesAction,
   toolbarExtraProp,
@@ -275,6 +277,7 @@ const FileSystemPagedBody = ({
       renderFilePreview={renderFilePreview}
       canPreviewFile={canPreviewFile}
       getEntryStatus={getEntryStatus}
+      renderEntryIcon={renderEntryIcon}
       propertiesActions={propertiesActions}
       onPropertiesAction={onPropertiesAction}
       toolbarExtra={({ clearSelection }) => {
@@ -509,6 +512,13 @@ const FileSystem = createWithRemoteLoader({
           );
         },
         [FilePreview, renderFilePreviewProp]
+      );
+
+      const thumbnailLoader = useMemo(() => getThumbnailLoader({ ajax, url: apis.fileManager?.getThumbnail?.url }), [ajax, apis.fileManager]);
+
+      const renderEntryIcon = useCallback(
+        ({ entry, icon }) => (entry?.fileId ? <Thumbnail loader={thumbnailLoader} id={entry.fileId} fallback={icon} /> : null),
+        [thumbnailLoader]
       );
 
       const handleSelectionChange = useCallback(
@@ -815,6 +825,7 @@ const FileSystem = createWithRemoteLoader({
                   renderFilePreview={renderFilePreview}
                   canPreviewFile={canPreviewFile}
                   getEntryStatus={getEntryStatus}
+                  renderEntryIcon={renderEntryIcon}
                   propertiesActions={propertiesActions}
                   onPropertiesAction={onPropertiesActionProp || handlePropertiesAction}
                   toolbarExtraProp={toolbarExtraProp}
@@ -856,6 +867,7 @@ const FileSystem = createWithRemoteLoader({
                 renderFilePreview={renderFilePreview}
                 canPreviewFile={canPreviewFile}
                 getEntryStatus={getEntryStatus}
+                renderEntryIcon={renderEntryIcon}
                 propertiesActions={propertiesActions}
                 onPropertiesAction={onPropertiesActionProp || handlePropertiesAction}
                 toolbarExtra={({ clearSelection }) => {

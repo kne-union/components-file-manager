@@ -6,6 +6,7 @@ import withLocale from './withLocale';
 import getColumns from './getColumns';
 import FileMobileList from './FileMobileList';
 import { buildFileListPageMenuItems, buildFolderSelectTree } from './menu';
+import { getThumbnailLoader } from '../../common/thumbnail';
 
 const List = createWithRemoteLoader({
   modules: [
@@ -38,6 +39,7 @@ const List = createWithRemoteLoader({
     const formModal = useFormModal();
     const { Input, Upload, TreeSelect } = FormInfo.fields;
     const menuItems = buildFileListPageMenuItems({ baseUrl, formatMessage });
+    const thumbnailLoader = useMemo(() => getThumbnailLoader({ ajax, url: apis.fileManager?.getThumbnail?.url }), [ajax, apis.fileManager]);
     const { selectedRowKeys, selectedRows, setSelectedRowKeys, clearSelectedRows } = Table.useSelectedRow({
       rowKey: 'id'
     });
@@ -302,9 +304,10 @@ const List = createWithRemoteLoader({
           getRowKey={getRowKey}
           formatMessage={formatMessage}
           preview={preview}
+          thumbnailLoader={thumbnailLoader}
         />
       ),
-      [formatMessage, preview]
+      [formatMessage, preview, thumbnailLoader]
     );
 
     return (
@@ -374,7 +377,7 @@ const List = createWithRemoteLoader({
         name="file-manager-list"
         renderMobile={renderMobile}
         columns={[
-          ...getColumns({ preview, getUrl, formatMessage }),
+          ...getColumns({ preview, getUrl, formatMessage, thumbnailLoader }),
           {
             name: 'options',
             renderType: 'options',

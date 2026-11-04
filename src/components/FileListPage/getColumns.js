@@ -1,5 +1,7 @@
 import withLocale from './withLocale';
 import { useIntl } from '@kne/react-intl';
+import { Thumbnail } from '../../common/thumbnail';
+import style from './style.module.scss';
 
 const formatFileSize = size => {
   if (size === undefined || size === null || size === '') {
@@ -28,7 +30,7 @@ const formatFileSize = size => {
   return '-';
 };
 
-const getColumns = ({ preview, getUrl, formatMessage }) => {
+const getColumns = ({ preview, getUrl, formatMessage, thumbnailLoader }) => {
   return [
     {
       name: 'id',
@@ -40,6 +42,16 @@ const getColumns = ({ preview, getUrl, formatMessage }) => {
       name: 'filename',
       title: formatMessage({ id: 'Filename' }),
       renderType: 'main',
+      ...(thumbnailLoader
+        ? {
+            getValueOf: item => (
+              <>
+                <Thumbnail loader={thumbnailLoader} id={item.id} className={style.filenameThumbnail} />
+                {item.filename}
+              </>
+            )
+          }
+        : {}),
       onClick: ({ colItem }) => {
         preview(colItem);
       }

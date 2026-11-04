@@ -47,6 +47,7 @@
 | renameFile     | 重命名（body.id / filename）                                 |
 | replaceFile    | 替换文件（query.id + form 文件）                             |
 | getFileUrl     | 访问地址模板（`/file-url/{id}`）                             |
+| getThumbnail   | 缩略图（`/thumbnail/{id}`，可选）；文件名前与移动端卡片显示缩略图，不可用时静默回退为原样式 |
 | upload         | 上传接口（添加文件）                                         |
 | folderTree     | 获取文件夹树（批量加入时选目标）                             |
 | folderAddFiles | 将文件库文件以 linked 节点加入指定文件夹                     |
@@ -70,6 +71,7 @@
 | formatMessage | 国际化格式化函数   | `(descriptor) => string` | -      |
 | preview       | 点击文件名预览回调 | `(item) => void`         | -      |
 | getUrl        | 生成访问地址       | `(item) => string`       | -      |
+| thumbnailLoader | 缩略图加载器；传入时文件名前显示缩略图 | object | -      |
 
 返回值：TablePage columns 配置数组。
 

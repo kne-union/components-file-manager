@@ -890,7 +890,34 @@ const apis = merge(
   }
 );
 
+/** 按 id 生成 50x50 色块；约 1/3 返回 404 演示回退为类型图标 */
+const mockThumbnail = async url => {
+  const id = decodeURIComponent((url.match(/thumbnail\/([^/?#]+)/) || [])[1] || '');
+  const hash = Array.from(id).reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 7);
+  await new Promise(resolve => setTimeout(resolve, 150 + (hash % 300)));
+  if (hash % 3 === 0) {
+    return {
+      status: 404,
+      data: new Blob([JSON.stringify({ statusCode: 404, error: 'Not Found', message: '该文件不支持缩略图' })], { type: 'application/json' })
+    };
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = 50;
+  canvas.height = 50;
+  const context = canvas.getContext('2d');
+  const gradient = context.createLinearGradient(0, 0, 50, 50);
+  gradient.addColorStop(0, `hsl(${hash % 360}, 70%, 70%)`);
+  gradient.addColorStop(1, `hsl(${(hash + 120) % 360}, 70%, 45%)`);
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 50, 50);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  return { status: 200, data: blob };
+};
+
 const ajax = async ({ loader, ...props }) => {
+  if (props.responseType === 'blob' && /\/thumbnail\//.test(props.url || '')) {
+    return mockThumbnail(props.url);
+  }
   if (props.responseType === 'blob' && /download-files/.test(props.url || '')) {
     // 最小合法空 zip（EOCD）
     const emptyZip = new Uint8Array([0x50, 0x4b, 0x05, 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
