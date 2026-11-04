@@ -47,7 +47,7 @@
 | renameFile     | 重命名（body.id / filename）                                 |
 | replaceFile    | 替换文件（query.id + form 文件）                             |
 | getFileUrl     | 访问地址模板（`/file-url/{id}`）                             |
-| getThumbnail   | 缩略图（`/thumbnail/{id}`，可选）；文件名前与移动端卡片显示缩略图，不可用时静默回退为原样式 |
+| getThumbnails  | 缩略图（POST `/thumbnails`，body.ids 最多 10 个，可选）；文件名前与移动端卡片显示缩略图，不可用时静默回退为原样式 |
 | upload         | 上传接口（添加文件）                                         |
 | folderTree     | 获取文件夹树（批量加入时选目标）                             |
 | folderAddFiles | 将文件库文件以 linked 节点加入指定文件夹                     |

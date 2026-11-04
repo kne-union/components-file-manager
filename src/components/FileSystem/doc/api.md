@@ -42,9 +42,9 @@
 
 #### 缩略图
 
-`fileManager.getThumbnail`（GET `{prefix}/thumbnail/{id}`，需 `@kne/fastify-file-manager` ≥ 3.1.0）存在时，文件图标替换为服务端缩略图，最多 10 个并发请求。依赖核心 FileSystem 支持 `renderEntryIcon`（`components-core` 未支持时自动忽略）。
+`fileManager.getThumbnails`（POST `{prefix}/thumbnails`，需 `@kne/fastify-file-manager` ≥ 3.2.0）存在时，文件图标替换为服务端缩略图。同一轮渲染内的文件合并成一批（每批最多 10 个，同时最多 2 批在途），一屏只发少量请求。依赖核心 FileSystem 支持 `renderEntryIcon`（`components-core` 未支持时自动忽略）。
 
-静默回退：加载中、单个文件 404 / 失败时显示原类型图标；接口路由不存在、返回非图片或服务持续不可用时，本页面内停止请求；均不弹错误提示。
+静默回退：加载中、结果为 `none`（类型不支持 / 生成失败 / 文件不存在）时显示原类型图标且不再请求；`pending` 每秒重试，最多 5 次后按无缩略图处理；接口路由不存在（旧版 3.1.x 服务端返回 404）、响应非 JSON 或 `code` 不为 0 时本页面内停止请求；均不弹错误提示。
 
 节点：`options.kind` 为 `file` \| `folder`；文件节点含 `options.fileId`。`options.linked: true` 表示挂载自文件库（删除树节点不删文件实体）。
 

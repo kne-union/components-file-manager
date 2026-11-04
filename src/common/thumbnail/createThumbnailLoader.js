@@ -1,56 +1,37 @@
-const MAX_CONCURRENT = 10;
+// 批量缩略图加载器：同一轮渲染内的 id 合并成一批，满 BATCH_SIZE 个或下一 tick 发送，
+// 服务端在结果里用 status 区分 ok / none / pending，接口固定返回 200，控制台不再出现大量 404。
+const BATCH_SIZE = 10;
+// 同时最多 2 个批次在途，避免一屏文件把服务端生成队列打满
+const MAX_BATCH_INFLIGHT = 2;
 const MAX_CACHE_SIZE = 500;
-const MAX_BUSY_RETRY = 2;
-const MAX_RETRY_DELAY = 10000;
+// pending（服务端排队中或超过等待上限）最多重试次数，超过后按无缩略图处理
+const MAX_PENDING_RETRY = 5;
+const PENDING_RETRY_DELAY = 1000;
+const COLLECT_DELAY = 0;
 // 从未成功过且连续硬失败（网络错误 / 5xx）达到该次数，视为服务端不可用
 const MAX_FAILURES_BEFORE_ANY_SUCCESS = 5;
 
-const ROUTE_NOT_FOUND = /^Route\s.+\snot found/i;
+const STATUS_OK = 'ok';
+const STATUS_PENDING = 'pending';
 
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-const normalizeBlob = response => {
-  let blob = response?.data;
-  if (blob && !(blob instanceof Blob) && blob.data instanceof Blob) {
-    blob = blob.data;
-  }
-  return blob instanceof Blob ? blob : null;
-};
-
-const readText = blob =>
-  typeof blob.text === 'function'
-    ? blob.text()
-    : new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsText(blob);
-      });
-
-const readJson = async blob => {
-  try {
-    return JSON.parse(await readText(blob));
-  } catch (e) {
-    return null;
-  }
-};
-
-const getHeader = (response, name) => {
-  const headers = response?.headers;
-  if (!headers) {
-    return undefined;
-  }
-  return typeof headers.get === 'function' ? headers.get(name) : headers[name] || headers[name.toLowerCase()];
-};
+const TASK_IDLE = 'idle';
+const TASK_QUEUED = 'queued';
+const TASK_SENT = 'sent';
 
 /**
- * 缩略图请求队列：最多 MAX_CONCURRENT 个并发；单个文件失败回退为 null；
- * 判定服务端不支持（路由不存在 / 非图片响应 / 持续不可用）后整体停用，后续不再发请求。
+ * 缩略图批量加载器：
+ * - request(id) 入队，同一轮渲染内的 id 合并成一次 POST；
+ * - ok 直接把 data URL 作为 src 并写入 LRU 缓存（不需要 objectURL，也就没有 revoke）；
+ * - none 记为无缩略图，组件回退为类型图标且不再请求；
+ * - pending 1 秒后重新入队，最多重试 MAX_PENDING_RETRY 次；
+ * - 判定服务端不支持（路由不存在 / 非 JSON 响应 / 宿主 code 不为 0）后整体停用，后续不再发请求。
  */
 const createThumbnailLoader = ({ ajax, url }) => {
   const cache = new Map();
-  const queue = [];
-  let active = 0;
+  const pending = [];
+  const unsettled = new Set();
+  let inflight = 0;
+  let timer = null;
   let disabled = !url || typeof ajax !== 'function';
   let hasSuccess = false;
   let hardFailures = 0;
@@ -67,94 +48,154 @@ const createThumbnailLoader = ({ ajax, url }) => {
       }
       if ('value' in entry) {
         cache.delete(key);
-        entry.value && URL.revokeObjectURL(entry.value);
       }
     }
   };
 
-  const settle = (task, value) => {
-    remember(task.id, value);
+  const settle = (task, value, { persist = true } = {}) => {
+    unsettled.delete(task);
+    task.state = TASK_IDLE;
+    if (persist) {
+      remember(task.id, value);
+    } else if (cache.get(task.id)?.task === task) {
+      // 硬失败不写长期缓存，下次挂载会重新尝试
+      cache.delete(task.id);
+    }
     task.listeners.forEach(listener => listener(value));
     task.listeners.clear();
   };
 
   const disable = () => {
+    if (disabled) {
+      return;
+    }
     disabled = true;
-    queue.splice(0).forEach(task => settle(task, null));
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    pending.splice(0);
+    Array.from(unsettled).forEach(task => settle(task, null));
   };
 
-  const fetchOnce = async id => {
+  const fetchBatch = async ids => {
     const response = await ajax({
-      url: url.replace(/{([\s\S]+?)}/g, (match, name) => (name === 'id' ? encodeURIComponent(id) : match)),
-      method: 'GET',
-      responseType: 'blob',
+      url,
+      method: 'POST',
+      data: { ids },
       showError: false
     });
     const status = response?.status ?? 200;
-    const blob = normalizeBlob(response);
-
-    if (status === 200) {
-      if (blob && /^image\//.test(blob.type)) {
-        return { type: 'success', value: URL.createObjectURL(blob) };
-      }
-      // 例如开发服务器把未知路由回退成 index.html
-      return { type: 'unsupported' };
-    }
+    // 批量接口固定返回 200，出现 404 只可能是路由不存在（3.1.x 及更早的服务端）
     if (status === 404) {
-      const json = blob ? await readJson(blob) : null;
-      return ROUTE_NOT_FOUND.test(json?.message || '') ? { type: 'unsupported' } : { type: 'missing' };
+      return { type: 'fatal' };
     }
-    if (status === 503) {
-      const seconds = Number(getHeader(response, 'retry-after'));
-      return { type: 'busy', delay: Math.min(Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 1000, MAX_RETRY_DELAY) };
-    }
-    if (status >= 500) {
+    if (status !== 200) {
       return { type: 'error' };
     }
-    return { type: 'missing' };
+    const body = response?.data;
+    // 非 JSON（例如开发服务器把未知路由回退成 index.html）或宿主 code 不为 0
+    if (!body || typeof body !== 'object' || body.code !== 0) {
+      return { type: 'fatal' };
+    }
+    return { type: 'ok', data: body.data || {} };
   };
 
-  const run = async task => {
-    let result;
-    for (let attempt = 0; ; attempt++) {
-      try {
-        result = await fetchOnce(task.id);
-      } catch (e) {
-        result = { type: 'error' };
-      }
-      if (result.type !== 'busy' || attempt >= MAX_BUSY_RETRY || disabled) {
-        break;
-      }
-      await sleep(result.delay);
+  function flush() {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
     }
+    while (!disabled && inflight < MAX_BATCH_INFLIGHT && pending.length) {
+      const tasks = pending.splice(0, BATCH_SIZE);
+      tasks.forEach(task => {
+        task.state = TASK_SENT;
+      });
+      send(tasks);
+    }
+  }
 
-    if (result.type === 'success') {
-      hasSuccess = true;
-      hardFailures = 0;
-      settle(task, result.value);
+  function send(tasks) {
+    inflight++;
+    fetchBatch(tasks.map(task => task.id))
+      .catch(() => ({ type: 'error' }))
+      .then(outcome => applyResult(tasks, outcome))
+      .finally(() => {
+        inflight--;
+        flush();
+      });
+  }
+
+  const schedule = () => {
+    if (timer !== null) {
       return;
     }
-    settle(task, null);
-    if (result.type === 'unsupported') {
-      disable();
-    } else if (result.type === 'error' && !hasSuccess && ++hardFailures >= MAX_FAILURES_BEFORE_ANY_SUCCESS) {
-      disable();
+    timer = setTimeout(() => {
+      timer = null;
+      flush();
+    }, COLLECT_DELAY);
+  };
+
+  const enqueue = task => {
+    if (disabled || task.cancelled) {
+      return;
+    }
+    task.state = TASK_QUEUED;
+    pending.push(task);
+    if (pending.length >= BATCH_SIZE) {
+      flush();
+    } else {
+      schedule();
     }
   };
 
-  const start = task => {
-    task.started = true;
-    active++;
-    run(task).finally(() => {
-      active--;
-      pump();
+  const retryLater = task => {
+    setTimeout(() => {
+      if (disabled) {
+        settle(task, null);
+        return;
+      }
+      if (task.cancelled || task.state !== TASK_IDLE) {
+        return;
+      }
+      enqueue(task);
+    }, PENDING_RETRY_DELAY);
+  };
+
+  const applyResult = (tasks, outcome) => {
+    if (disabled) {
+      return;
+    }
+    if (outcome.type === 'fatal') {
+      disable();
+      return;
+    }
+    if (outcome.type === 'error') {
+      tasks.forEach(task => settle(task, null, { persist: false }));
+      if (!hasSuccess && ++hardFailures >= MAX_FAILURES_BEFORE_ANY_SUCCESS) {
+        disable();
+      }
+      return;
+    }
+    tasks.forEach(task => {
+      const entry = outcome.data[task.id];
+      if (entry?.status === STATUS_OK && typeof entry.data === 'string') {
+        hasSuccess = true;
+        hardFailures = 0;
+        settle(task, entry.data);
+        return;
+      }
+      if (entry?.status === STATUS_PENDING) {
+        task.retries++;
+        if (task.retries <= MAX_PENDING_RETRY) {
+          task.state = TASK_IDLE;
+          retryLater(task);
+          return;
+        }
+      }
+      // none、结果里缺少该 id、重试次数用尽：都当作没有缩略图
+      settle(task, null);
     });
-  };
-
-  const pump = () => {
-    while (!disabled && active < MAX_CONCURRENT && queue.length) {
-      start(queue.shift());
-    }
   };
 
   /** 已知结果：string 为图片地址，null 为无缩略图，undefined 为未知 */
@@ -166,7 +207,7 @@ const createThumbnailLoader = ({ ajax, url }) => {
     return entry && 'value' in entry ? entry.value : undefined;
   };
 
-  /** 订阅缩略图结果，返回取消函数；未开始的请求在无订阅者时会被移出队列 */
+  /** 订阅缩略图结果，返回取消函数；未发送的请求在无订阅者时会被移出队列 */
   const request = (id, listener) => {
     if (disabled) {
       listener(null);
@@ -179,20 +220,28 @@ const createThumbnailLoader = ({ ajax, url }) => {
     }
     let task = entry?.task;
     if (!task) {
-      task = { id, listeners: new Set(), started: false };
+      task = { id, listeners: new Set(), retries: 0, state: TASK_IDLE, cancelled: false };
       cache.set(id, { task });
-      queue.push(task);
+      unsettled.add(task);
     }
+    task.cancelled = false;
     task.listeners.add(listener);
-    pump();
+    if (task.state === TASK_IDLE) {
+      enqueue(task);
+    }
     return () => {
       task.listeners.delete(listener);
-      if (!task.started && task.listeners.size === 0) {
-        const index = queue.indexOf(task);
-        index > -1 && queue.splice(index, 1);
-        if (cache.get(id)?.task === task) {
-          cache.delete(id);
-        }
+      // 已发出的批次不撤回（结果会写进缓存），其余状态没人订阅就直接丢掉，避免白跑一次请求
+      if (task.listeners.size > 0 || task.state === TASK_SENT) {
+        return;
+      }
+      task.cancelled = true;
+      task.state = TASK_IDLE;
+      const index = pending.indexOf(task);
+      index > -1 && pending.splice(index, 1);
+      unsettled.delete(task);
+      if (cache.get(id)?.task === task) {
+        cache.delete(id);
       }
     };
   };

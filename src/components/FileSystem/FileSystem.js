@@ -514,7 +514,7 @@ const FileSystem = createWithRemoteLoader({
         [FilePreview, renderFilePreviewProp]
       );
 
-      const thumbnailLoader = useMemo(() => getThumbnailLoader({ ajax, url: apis.fileManager?.getThumbnail?.url }), [ajax, apis.fileManager]);
+      const thumbnailLoader = useMemo(() => getThumbnailLoader({ ajax, url: apis.fileManager?.getThumbnails?.url }), [ajax, apis.fileManager]);
 
       const renderEntryIcon = useCallback(
         ({ entry, icon }) => (entry?.fileId ? <Thumbnail loader={thumbnailLoader} id={entry.fileId} fallback={icon} /> : null),
