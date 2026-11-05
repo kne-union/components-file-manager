@@ -47,7 +47,7 @@
 | renameFile     | 重命名（body.id / filename）                                 |
 | replaceFile    | 替换文件（query.id + form 文件）                             |
 | getFileUrl     | 访问地址模板（`/file-url/{id}`）                             |
-| getThumbnails  | 缩略图（POST `/thumbnails`，body.ids 最多 10 个，可选）；文件名前与移动端卡片显示缩略图，不可用时静默回退为原样式 |
+| getThumbnails  | 缩略图（POST `/thumbnails`，body.ids 最多 10 个，可选）；文件名前与移动端卡片默认显示文件类型图标，取到缩略图后替换，无缩略图时保持图标 |
 | upload         | 上传接口（添加文件）                                         |
 | folderTree     | 获取文件夹树（批量加入时选目标）                             |
 | folderAddFiles | 将文件库文件以 linked 节点加入指定文件夹                     |
@@ -71,9 +71,11 @@
 | formatMessage | 国际化格式化函数   | `(descriptor) => string` | -      |
 | preview       | 点击文件名预览回调 | `(item) => void`         | -      |
 | getUrl        | 生成访问地址       | `(item) => string`       | -      |
-| thumbnailLoader | 缩略图加载器；传入时文件名前显示缩略图 | object | -      |
+| thumbnailLoader | 缩略图加载器；取到缩略图时替换文件名前的类型图标 | object | -      |
 
 返回值：TablePage columns 配置数组。
+
+`filename` 列始终以 24px 文件类型图标占位（按文件后缀取图标），缩略图可用时替换为同尺寸图片，加载失败或服务端不支持时回退为图标；`mimetype`（文件类型）列默认宽度 200px 且单行省略，超长 MIME 悬停显示完整内容。
 
 ## ColumnsLoader
 
