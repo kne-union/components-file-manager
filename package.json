@@ -1,6 +1,6 @@
 {
   "name": "@kne-components/components-file-manager",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "用于管理文件.",
   "scripts": {
     "init": "husky",
@@ -64,7 +64,7 @@
   },
   "devDependencies": {
     "@kne/craco": "^7.1.4",
-    "@kne/modules-dev": "^2.4.19",
+    "@kne/modules-dev": "^2.4.20",
     "@kne/react-fetch": "^1.5.7",
     "@kne/remote-loader": "^1.5.0",
     "@testing-library/jest-dom": "^6.4.2",
