@@ -3,7 +3,7 @@ import classnames from 'classnames';
 import get from 'lodash/get';
 import { createWithRemoteLoader } from '@kne/remote-loader';
 import FileType from '@kne/react-file-type';
-import { formatFileSize } from './getColumns';
+import { formatFileSize, resolveFileType } from './getColumns';
 import { Thumbnail } from '../../common/thumbnail';
 import style from './FileMobileList.module.scss';
 
@@ -26,12 +26,6 @@ const formatDateTime = value => {
   }
   const pad = n => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-};
-
-const resolveFileType = item => {
-  const name = item?.filename || item?.originName || '';
-  const parts = String(name).split('.');
-  return parts.length > 1 ? parts.pop() : '';
 };
 
 const resolveActions = (optionsColumn, item, context) => {

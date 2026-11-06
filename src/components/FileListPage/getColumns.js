@@ -1,7 +1,18 @@
 import withLocale from './withLocale';
 import { useIntl } from '@kne/react-intl';
+import FileType from '@kne/react-file-type';
 import { Thumbnail } from '../../common/thumbnail';
 import style from './style.module.scss';
+
+// 类型图标与缩略图使用同一尺寸，缩略图到位时直接替换，不产生布局跳动
+const FILE_ICON_SIZE = 24;
+
+/** 从文件名取后缀，供文件类型图标使用 */
+export const resolveFileType = item => {
+  const name = item?.filename || item?.originName || '';
+  const parts = String(name).split('.');
+  return parts.length > 1 ? parts.pop() : '';
+};
 
 const formatFileSize = size => {
   if (size === undefined || size === null || size === '') {
@@ -42,16 +53,21 @@ const getColumns = ({ preview, getUrl, formatMessage, thumbnailLoader }) => {
       name: 'filename',
       title: formatMessage({ id: 'Filename' }),
       renderType: 'main',
-      ...(thumbnailLoader
-        ? {
-            getValueOf: item => (
-              <>
-                <Thumbnail loader={thumbnailLoader} id={item.id} className={style.filenameThumbnail} />
-                {item.filename}
-              </>
-            )
-          }
-        : {}),
+      getValueOf: item => (
+        <>
+          <Thumbnail
+            loader={thumbnailLoader}
+            id={item.id}
+            className={style.filenameThumbnail}
+            fallback={
+              <span className={style.filenameTypeIcon}>
+                <FileType type={resolveFileType(item)} size={FILE_ICON_SIZE} />
+              </span>
+            }
+          />
+          {item.filename}
+        </>
+      ),
       onClick: ({ colItem }) => {
         preview(colItem);
       }
@@ -67,7 +83,9 @@ const getColumns = ({ preview, getUrl, formatMessage, thumbnailLoader }) => {
     },
     {
       name: 'mimetype',
-      title: formatMessage({ id: 'MimeType' })
+      title: formatMessage({ id: 'MimeType' }),
+      width: 200,
+      ellipsis: true
     },
     {
       name: 'url',
