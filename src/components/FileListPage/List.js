@@ -1,6 +1,6 @@
 import { createWithRemoteLoader } from '@kne/remote-loader';
 import { useMemo, useRef, useState, useCallback } from 'react';
-import { App, Space } from 'antd';
+import { App } from 'antd';
 import { useIntl } from '@kne/react-intl';
 import withLocale from './withLocale';
 import getColumns from './getColumns';
@@ -17,18 +17,18 @@ const List = createWithRemoteLoader({
     'components-core:FormInfo',
     'components-core:FormInfo@useFormModal',
     'components-core:FileList@FileUpload',
+    'components-core:File@useFileModal',
     'components-core:Modal@useModal',
-    'components-core:FilePreview',
     'components-core:File@Download',
-    'components-core:Icon',
     'components-core:Layout@Menu'
   ]
 })(
   withLocale(({ remoteModules, baseUrl, pageProps = {} }) => {
-    const [TablePage, Table, Filter, usePreset, FormInfo, useFormModal, FileUpload, useModal, FilePreview, Download, Icon, Menu] =
+    const [TablePage, Table, Filter, usePreset, FormInfo, useFormModal, FileUpload, useFileModal, useModal, Download, Menu] =
       remoteModules;
     const { formatMessage } = useIntl();
     const { apis, ajax, staticUrl } = usePreset();
+    const fileModal = useFileModal();
     const modal = useModal();
     const { getFilterValue, fields: filterFields } = Filter;
     const { InputFilterItem, NumberRangeFilterItem, TypeDateRangePickerFilterItem } = filterFields;
@@ -72,18 +72,13 @@ const List = createWithRemoteLoader({
 
     const preview = useCallback(
       item => {
-        modal({
-          title: (
-            <Space>
-              {formatMessage({ id: 'FilePreview' })}
-              <Download id={item.id} type="link" originName={item.filename} icon={<Icon type="xiazai" />} />
-            </Space>
-          ),
-          children: <FilePreview id={item.id} originName={item.filename} />,
-          footer: null
+        fileModal({
+          id: item.id,
+          filename: item.filename,
+          openDownload: true
         });
       },
-      [Download, FilePreview, Icon, formatMessage, modal]
+      [fileModal]
     );
 
     const handleBatchDelete = useCallback(

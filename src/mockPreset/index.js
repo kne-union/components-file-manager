@@ -566,12 +566,67 @@ const filterFileList = ({ data } = {}) => {
   return paginate(list, currentPage, perPage);
 };
 
+/** 与 components-core File / react-file 示例对齐的本地预览资源（public/mock） */
+const MOCK_BY_EXT = {
+  pdf: 'resume.pdf',
+  docx: 'resume.docx',
+  xlsx: 'resume.xlsx',
+  pptx: 'james-webb-space-telescope.pptx',
+  png: 'resume.png',
+  jpg: 'resume.png',
+  jpeg: 'resume.png',
+  svg: 'small-image.png',
+  txt: 'demo.txt',
+  md: 'example.md',
+  html: 'resume.html',
+  htm: 'resume.html',
+  mp3: 'audio.wav',
+  wav: 'audio.wav',
+  mp4: 'video.mp4',
+  zip: 'example.zip',
+  log: 'demo.txt',
+  dwg: 'demo.txt',
+  bin: 'demo.txt'
+};
+
+const resolveFilenameByFileId = id => {
+  const fileId = String(id || '');
+  const fromList = (fileList.data?.pageData || []).find(file => String(file.id) === fileId);
+  if (fromList?.filename) {
+    return fromList.filename;
+  }
+  ['demo', 'admin-file-system'].forEach(type => ensureFolderType(type));
+  for (const nodes of folderStore.values()) {
+    const node = (nodes || []).find(item => String(item.options?.fileId) === fileId);
+    if (node) {
+      return node.options?.filename || node.name;
+    }
+  }
+  return fileId;
+};
+
+const resolveMockFileUrl = id => {
+  const filename = resolveFilenameByFileId(id);
+  const ext = String(filename).split('.').pop()?.toLowerCase() || '';
+  const mockName = MOCK_BY_EXT[ext] || 'demo.txt';
+  return `/mock/${mockName}`;
+};
+
 const apis = merge(
   {},
   {
     fileManager: getApis()
   },
   {
+    file: {
+      staticUrl: typeof window !== 'undefined' ? window.PUBLIC_URL || '' : '',
+      getUrl: {
+        loader: async ({ params, urlParams } = {}) => {
+          const id = params?.id || urlParams?.id;
+          return resolveMockFileUrl(id);
+        }
+      }
+    },
     fileManager: {
       getFileList: {
         loader: props => filterFileList(props)
@@ -607,7 +662,7 @@ const apis = merge(
       getFileUrl: {
         loader: ({ urlParams }) => {
           const id = urlParams?.id || 'demo';
-          return { url: `/api/v1/static/file-id/${id}` };
+          return { url: resolveMockFileUrl(id) };
         }
       },
       folderTree: {
