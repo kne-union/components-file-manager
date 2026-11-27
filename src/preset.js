@@ -55,7 +55,7 @@ export const globalInit = async () => {
     //url: 'http://localhost:3001',
     //tpl: '{{url}}',
     remote: 'components-core',
-    defaultVersion: '0.7.3'
+    defaultVersion: '0.7.10'
   };
   remoteLoaderPreset({
     remotes: {
@@ -84,6 +84,14 @@ export const globalInit = async () => {
   return {
     ajax,
     apis: {
+      file: {
+        staticUrl: window.PUBLIC_URL || '',
+        getUrl: {
+          url: '/api/v1/static/file-url/{id}',
+          paramsType: 'urlParams',
+          ignoreSuccessState: true
+        }
+      },
       oss: {
         url: '/api/v1/static/file-url/{id}',
         paramsType: 'urlParams',

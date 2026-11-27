@@ -379,9 +379,8 @@ const FileSystem = createWithRemoteLoader({
     'components-core:FormInfo',
     'components-core:FormInfo@useFormModal',
     'components-core:FilePreview',
-    'components-core:Modal@useModal',
-    'components-core:File@Download',
-    'components-core:Icon'
+    'components-core:File@useFileModal',
+    'components-core:File@Download'
   ]
 })(
   withLocale(
@@ -404,12 +403,12 @@ const FileSystem = createWithRemoteLoader({
       virtualScroll = true,
       ...props
     }) => {
-      const [CoreFileSystem, usePreset, FormInfo, useFormModal, FilePreview, useModal, Download, Icon] = remoteModules;
+      const [CoreFileSystem, usePreset, FormInfo, useFormModal, FilePreview, useFileModal, Download] = remoteModules;
       const { formatMessage } = useIntl();
       const { apis, ajax } = usePreset();
       const { message, modal: confirmModal } = App.useApp();
       const formModal = useFormModal();
-      const modal = useModal();
+      const fileModal = useFileModal();
       const { Input, TreeSelect } = FormInfo.fields;
       const fetchRef = useRef(null);
       const itemsRef = useRef([]);
@@ -473,18 +472,13 @@ const FileSystem = createWithRemoteLoader({
           if (!entry?.fileId) {
             return;
           }
-          modal({
-            title: (
-              <Space>
-                {formatMessage({ id: 'FilePreview' })}
-                <Download id={entry.fileId} type="link" originName={entry.name} icon={<Icon type="xiazai" />} />
-              </Space>
-            ),
-            children: <FilePreview id={entry.fileId} originName={entry.name} />,
-            footer: null
+          fileModal({
+            id: entry.fileId,
+            filename: entry.name,
+            openDownload: true
           });
         },
-        [Download, FilePreview, Icon, formatMessage, modal, onFileOpen]
+        [fileModal, onFileOpen]
       );
 
       const canPreviewFile = useCallback(
